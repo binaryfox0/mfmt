@@ -323,8 +323,6 @@ void extract_command(void *arg)
     
     uint8_t *buf = 0;
     int64_t bufsize = 0;
-    uint8_t *rawbuf = 0;
-    int64_t rawbufsize = 0;
 
     FILE *file = 0;
     
@@ -357,24 +355,15 @@ void extract_command(void *arg)
     
     if(decompress_file_zip(reader, &buf, &bufsize) < 0)
         return;
-    if(decompress_file_zlib(buf, bufsize, &rawbuf, &rawbufsize) < 0)
-    {
-        info("this may not meant that the file was corrupted or unreadable");
-        info("it just because that it wasn't a zlib compressed file");
-        rawbuf = buf;
-        rawbufsize = bufsize;
-    } else {
-        free(buf);
-    }
     
     mz_zip_reader_close(reader);
     mz_zip_reader_delete(&reader);
 
     file = fopen(out_path, "wb");
-    fwrite(rawbuf, 1, rawbufsize, file);
+    fwrite(buf, 1, bufsize, file);
     fclose(file);
 
-    free(rawbuf);
+    free(buf);
 }
 
 void decode_command(void *arg)

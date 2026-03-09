@@ -5,6 +5,9 @@
 
 #include <aparse.h>
 
+#include <zlib-ng.h>
+
+#include "msav_zlib.h"
 #include "msav_stream.h"
 #include "msav_object.h"
 
@@ -411,11 +414,28 @@ msav_err_t msav_parse_from_memory(
 )
 {
     msav__rstream_t stream = {0};
+    int32_t zlib_rc = Z_OK;
+    uint8_t *decompressed_buf = 0;
+    int64_t decompressed_bufsz = 0;
     msav_file_t tmp = {0};
+
     if(!buf || bufsz == 0)
         return MSAV_ERR_INVALID_ARG;
 
-    stream = (msav__rstream_t){.buf = buf, .bufsz = bufsz};
+    zlib_rc = msav__decompress(
+            buf, (int64_t)bufsz, 
+            &decompressed_buf, &decompressed_bufsz
+    );
+    if(zlib_rc != Z_DATA_ERROR && zlib_rc != Z_OK)
+        return MSAV_ERR_ZLIB;
+
+    if(!decompressed_buf)
+    {
+        decompressed_buf = (uint8_t*)buf;
+        decompressed_bufsz = (int64_t)bufsz;
+    }
+
+    stream = (msav__rstream_t){.buf = decompressed_buf, .bufsz = decompressed_bufsz};
 
     for(int i = 0; i < (int)MSAV__ARRSZ(msav__header); i++)
     {
@@ -438,6 +458,9 @@ msav_err_t msav_parse_from_memory(
     // if(tmp.version >= 8)
     //     mfmtio_read_chunk(&stream, 0, mfmtio_read_markers);
     // mfmtio_read_chunk(&stream, 0, mfmtio_read_custom);
+    //
+    if(decompressed_buf != buf)
+        free(decompressed_buf);
 
     return MSAV_ERR_OK;
 }

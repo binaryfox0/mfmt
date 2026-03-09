@@ -29,9 +29,10 @@ target_include_directories(mfmtio PUBLIC
 )
 
 add_library(msav 
+    msav/src/msav.c
+    msav/src/msav_zlib.c
     msav/src/msav_arr.c
     msav/src/msav_object.c
-    msav/src/msav.c
 )
 # temporarily public for development purposes
 target_link_libraries(msav PUBLIC 
