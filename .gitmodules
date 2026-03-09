@@ -1,0 +1,9 @@
+[submodule "deps/aparse"]
+	path = deps/aparse
+	url = git@github.com:binaryfox0/aparse.git
+[submodule "deps/zlib-ng"]
+	path = deps/zlib-ng
+	url = git@github.com:zlib-ng/zlib-ng.git
+[submodule "deps/minizip-ng"]
+	path = deps/minizip-ng
+	url = git@github.com:zlib-ng/minizip-ng.git
