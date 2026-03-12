@@ -7,3 +7,6 @@
 [submodule "deps/minizip-ng"]
 	path = deps/minizip-ng
 	url = git@github.com:zlib-ng/minizip-ng.git
+[submodule "deps/tree-sitter-java"]
+	path = deps/tree-sitter-java
+	url = git@github.com:tree-sitter/tree-sitter-java
