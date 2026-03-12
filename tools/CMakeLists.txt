@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.10)
 
 project(mfmt-tools)
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(TS REQUIRED tree-sitter)
+
 # if(WIN32)
 #     find_package(PDCurses CONFIG REQUIRED)
 # else()
@@ -37,3 +40,20 @@ target_link_libraries(msav-cli PRIVATE
     msav
 )
 target_add_asan(msav-cli)
+
+add_executable(blockdb 
+    ${CMAKE_SOURCE_DIR}/deps/tree-sitter-java/src/parser.c
+    blockdb/src/main.c
+    blockdb/src/utils.c
+    blockdb/src/print_tree.c
+    blockdb/src/generate.c
+)
+target_include_directories(blockdb PRIVATE 
+    ${TS_INCLUDE_DIRS}
+    ${CMAKE_SOURCE_DIR}/deps/tree-sitter-java/include
+    blockdb/include
+)
+target_link_libraries(blockdb PRIVATE 
+    aparse
+    ${TS_LIBRARIES}
+)

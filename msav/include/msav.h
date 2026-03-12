@@ -11,7 +11,7 @@ typedef enum {
     MSAV_ERR_OK = 0,        /**< Operation completed successfully */
     MSAV_ERR_INVALID_ARG,   /**< Invalid argument passed to function */
     MSAV_ERR_IO,            /**< I/O failure during file operations */
-    MSAV_ERR_ZLIB,
+    MSAV_ERR_ZLIB,          /**< Zlib compression-related errors */
     MSAV_ERR_OUT_OF_MEM,    /**< Memory allocation failed */
     MSAV_ERR_FORMAT,        /**< Invalid or unsupported file format */
     MSAV_ERR_CORRUPT,       /**< Corrupted or inconsistent data */
