@@ -19,11 +19,48 @@
 
 #define ARRSZ(arr) (sizeof((arr)) / sizeof((arr)[0]))
 
+static char *bdb__path_cat(const char *a, const char *b)
+{
+    size_t len_a = 0;
+    size_t len_b = 0;
+    size_t need_sep = 0;
+    size_t len = 0;
+    char *out = 0;
+
+    if(a)
+        len_a = strlen(a);
+
+    if(b)
+        len_b = strlen(b);
+
+    if(len_a && len_b && a[len_a - 1] != '/')
+        need_sep = 1;
+
+    len = len_a + need_sep + len_b;
+
+    out = malloc(len);
+    if(!out)
+        return 0;
+
+    if(len_a)
+        memcpy(out, a, len_a);
+
+    if(need_sep)
+        out[len_a] = '/';
+
+    if(len_b)
+        memcpy(out + len_a + need_sep, b, len_b);
+
+    out[len] = '\0';
+
+    return out;
+}
+
 static int bdb__collect_files(const char *path, bdb__arr_t *out)
 {
     DIR *dir = 0;
     struct dirent *entry = 0;
-    char full[PATH_MAX] = {0};
+    char *full = 0;
     struct stat st = {0};
 
     dir = opendir(path);
@@ -40,19 +77,25 @@ static int bdb__collect_files(const char *path, bdb__arr_t *out)
                 !strcmp(entry->d_name, "..")
           ) continue;
 
-        snprintf(full, sizeof(full), "%s/%s", path, entry->d_name);
+        full = bdb__path_cat(path, entry->d_name);
+        if(!full)
+        {
+            bdb__error_errno("out of memory while creating file path");
+            continue;
+        }
 
         stat(full, &st);
         if(S_ISDIR(st.st_mode))
+        {
             bdb__collect_files(full, out);
+            free(full);
+        }
         else
         {
-            char *file_path = strdup(full);
-            if(!file_path)
-                continue;
-            if(bdb__arr_append(out, &file_path) < 0)
+            if(bdb__arr_append(out, &full) < 0)
             {
-                bdb__error_errno("failed to append file path into array");
+                bdb__error_errno("out of memory while appending file path into array");
+                free(full);
                 bdb__arr_destroy_strings(out);
             }
         }
@@ -108,6 +151,7 @@ typedef struct
     (bdb__gen_var_desc_t) { \
         .name = (name_in), \
         .is_bool = (is_bool_in), \
+        .bit_idx = (bit_idx_in), \
         .out_offset = offsetof(type, member), \
         .out_size = sizeof(((type*)0)->member) \
     }
@@ -127,7 +171,10 @@ bdb__gen_var_desc_t* bdb__gen_var_desc_find(
                 str, 
                 bdb__arr_get(vds, bdb__gen_var_desc_t, i).name, 
                 len
-        )) return &bdb__arr_get(vds, bdb__gen_var_desc_t, i);
+        )) {
+            bdb__info("found %s", bdb__arr_get(vds, bdb__gen_var_desc_t, i).name);
+            return &bdb__arr_get(vds, bdb__gen_var_desc_t, i);
+        }
     }
 
     return 0;
@@ -196,7 +243,6 @@ static int bdb__gen_handle_assign(
     return 0;
 }
 
-// Recursively handle assignment expressions (including chained assignments)
 static int bdb__gen_handle_assign_expr(
         const bdb__arr_t *vds,
         TSNode left,
@@ -204,50 +250,61 @@ static int bdb__gen_handle_assign_expr(
         const char *src,
         bdb__gen_tn_t *tn)
 {
-    if (ts_node_is_null(left) || ts_node_is_null(right))
+    TSNode r = {0};
+
+    if(!vds || !src || !tn)
+        return -1;
+
+    if(ts_node_is_null(left) || ts_node_is_null(right))
         return 0;
 
-    // If right-hand side is another assignment, recurse first (right-associative)
-    if (!strcmp(ts_node_type(right), "assignment_expression"))
+    r = right;
+
+    /* resolve final RHS value (assignment is right-associative) */
+    while(!strcmp(ts_node_type(r), "assignment_expression"))
     {
-        TSNode inner_left  = ts_node_child_by_field_name(right, "left", 4);
-        TSNode inner_right = ts_node_child_by_field_name(right, "right", 5);
-        if (!ts_node_is_null(inner_left) && !ts_node_is_null(inner_right))
-        {
-            int ret = bdb__gen_handle_assign_expr(vds, inner_left, inner_right, src, tn);
-            if (ret < 0) return ret;
-        }
-        // After recursion, left-hand side may also be assigned from the nested RHS
-        left = ts_node_child_by_field_name(right, "left", 4);
-        right = ts_node_child_by_field_name(right, "right", 5);
-        if (ts_node_is_null(left) || ts_node_is_null(right))
-            return 0;
+        TSNode inner_left = {0};
+        TSNode inner_right = {0};
+
+        inner_left = ts_node_child_by_field_name(r, "left", 4);
+        inner_right = ts_node_child_by_field_name(r, "right", 5);
+
+        if(ts_node_is_null(inner_left) || ts_node_is_null(inner_right))
+            break;
+
+        /* recurse to assign inner variable */
+        if(bdb__gen_handle_assign_expr(vds, inner_left, inner_right, src, tn) < 0)
+            return -1;
+
+        r = inner_right;
     }
 
-    uint32_t s = 0, e = 0;
-
-    if (!strcmp(ts_node_type(left), "identifier"))
+    /* assign outer variable using final RHS value */
+    if(!strcmp(ts_node_type(left), "identifier"))
     {
-        s = ts_node_start_byte(left);
-        e = ts_node_end_byte(left);
+        uint32_t s = ts_node_start_byte(left);
+        uint32_t e = ts_node_end_byte(left);
 
-        return bdb__gen_handle_assign(vds, src + s, e - s, right, src, tn);
+        return bdb__gen_handle_assign(vds, src + s, e - s, r, src, tn);
     }
-    else if (!strcmp(ts_node_type(left), "field_access"))
+    else if(!strcmp(ts_node_type(left), "field_access"))
     {
-        TSNode field = ts_node_child_by_field_name(left, "field", 5);
-        if (ts_node_is_null(field))
+        TSNode field = {0};
+        uint32_t s = 0;
+        uint32_t e = 0;
+
+        field = ts_node_child_by_field_name(left, "field", 5);
+        if(ts_node_is_null(field))
             return 0;
 
         s = ts_node_start_byte(field);
         e = ts_node_end_byte(field);
 
-        return bdb__gen_handle_assign(vds, src + s, e - s, right, src, tn);
+        return bdb__gen_handle_assign(vds, src + s, e - s, r, src, tn);
     }
 
     return 0;
 }
-
 // Scan a constructor body and handle all assignments
 static int bdb__gen_scan_ctor_body(
         TSNode node, 
@@ -274,7 +331,10 @@ static int bdb__gen_scan_ctor_body(
 
         int ret = bdb__gen_handle_assign_expr(vds, left, right, src, tn);
         if (ret < 0)
+        {
+            bdb__error("failed to process assignment");
             return -1;
+        }
     }
     return 0;
 }
@@ -507,27 +567,37 @@ static void bdb__gen_merge_flags(
     }
 }
 
+
+
 static void bdb__gen_resolve_tree(
         bdb__gen_tn_t *tn,
         const bdb__arr_t *vds
 )
 {
-    size_t i = 0;
-
     if(tn->parent)
         bdb__gen_merge_flags(vds, tn, tn->parent);
 
-    for(i = 0; i < tn->children.count; i++)
+    if(tn->children.count == 0)
+    {
+        bdb__info("%s -> %s, has_building: 0x%02X, modules_bitmask; 0x%02X", 
+                tn->name, tn->parent_name, tn->has_building, tn->modules_bitmask);
+        return;
+    }
+
+    for(size_t i = 0; i < tn->children.count; i++)
     {
         bdb__gen_tn_t *c = bdb__arr_get(&tn->children, bdb__gen_tn_t*, i);
-        bdb__gen_resolve_tree(tn, vds);
+        bdb__gen_resolve_tree(c, vds);
     }
 }
 
 extern const TSLanguage *tree_sitter_java(void);
 void generate_command(void *args)
 {
-    const char *path = *(const char**)args;
+    const char *mindustry_root = *(const char**)args;
+    char *blocks_class_path = 0;
+    char *blocks_java_path = 0;
+
     bdb__arr_t file_list = { .elem_size = sizeof(void*) };
     TSParser *parser = 0;
     bdb__arr_t classes = { .elem_size = sizeof(void*) };
@@ -538,8 +608,14 @@ void generate_command(void *args)
         .data = (void*)bdb__queried_vars
     };
 
-    if(bdb__collect_files(path, &file_list) < 0)
+    blocks_class_path = bdb__path_cat(mindustry_root, "core/src/mindustry/world/blocks");  
+
+    if(bdb__collect_files(blocks_class_path, &file_list) < 0)
+    {
+        free(blocks_class_path);
         return;
+    }
+    free(blocks_class_path);
 
     parser = ts_parser_new();
     ts_parser_set_language(parser, tree_sitter_java());
@@ -577,10 +653,10 @@ void generate_command(void *args)
     bdb__gen_build_tree(&classes);
     for(size_t i = 0; i < classes.count; i++)
     {
-        bdb__gen_tn_t *c = bdb__arr_get(&classes, bdb__gen_tn_t*, i);
-        if(c->parent)
+        bdb__gen_tn_t *tn = bdb__arr_get(&classes, bdb__gen_tn_t*, i);
+        if(tn->parent)
             continue;
-        bdb__info("%s", c->name);
+        bdb__gen_resolve_tree(tn, &vds);
     }
 
     for(size_t i = 0; i < classes.count; i++)
@@ -591,6 +667,8 @@ void generate_command(void *args)
         bdb__arr_destroy(&tn->children);
         free(tn);
     }
+    
+    blocks_java_path = bdb__path_cat(mindustry_root, "core/src/mindustry/content/Blocks.java");  
 
     bdb__arr_destroy(&classes);
 }
