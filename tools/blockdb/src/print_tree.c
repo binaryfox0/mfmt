@@ -3,11 +3,23 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <aparse.h>
 #include <tree_sitter/api.h>
 
-#include "utils.h"
+#include "bdb_utils.h"
 
-static void print_cursor_tree(
+
+#define ANSI_RESET      "\x1b[0m"
+#define ANSI_BOLD       "\x1b[1m"
+
+#define ANSI_FG_YELLOW  "\x1b[33m"
+#define ANSI_FG_GREEN   "\x1b[32m"
+#define ANSI_FG_CYAN    "\x1b[36m"
+#define ANSI_FG_GRAY    "\x1b[90m"
+
+#define bdb__colorize(col, str) __aparse_ansies(col) str __aparse_ansies(ANSI_RESET)
+
+static void bdb__print_ast(
         TSTreeCursor *cursor,
         const char *src,
         const int indent)
@@ -34,20 +46,20 @@ static void print_cursor_tree(
     printf("%*s", indent * 2, "");
 
     if (field)
-        printf("%s: ", field);
+        printf(bdb__colorize(ANSI_FG_CYAN, "%s") ": ", field);
 
-    printf("%s", type);
+    printf(bdb__colorize(ANSI_FG_GREEN, "%s"), type);
 
     if (child_count == 0) {
-        printf(" = \"%.*s\"", (int)(end - start), src + start);
+        printf(" = " bdb__colorize(ANSI_FG_YELLOW, "\"%.*s\""), 
+                (int)(end - start), src + start);
     }
 
     printf("\n");
 
     if (ts_tree_cursor_goto_first_child(cursor)) {
-
         do {
-            print_cursor_tree(cursor, src, indent + 1);
+            bdb__print_ast(cursor, src, indent + 1);
         } while (ts_tree_cursor_goto_next_sibling(cursor));
 
         ts_tree_cursor_goto_parent(cursor);
@@ -55,7 +67,6 @@ static void print_cursor_tree(
 }
 
 extern const TSLanguage *tree_sitter_java(void);
-
 void print_tree_command(void *args)
 {
     const char *path = *(const char**)args;
@@ -69,7 +80,7 @@ void print_tree_command(void *args)
 
     TSTreeCursor cursor = {0};
 
-    if (read_file(path, &src, &src_len) < 0)
+    if (bdb__read_file(path, &src, &src_len) < 0)
         return;
 
     parser = ts_parser_new();
@@ -80,7 +91,7 @@ void print_tree_command(void *args)
     root = ts_tree_root_node(tree);
     cursor = ts_tree_cursor_new(root);
 
-    print_cursor_tree(&cursor, src, 0);
+    bdb__print_ast(&cursor, src, 0);
 
     ts_tree_cursor_delete(&cursor);
     ts_tree_delete(tree);

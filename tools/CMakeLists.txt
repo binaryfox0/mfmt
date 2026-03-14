@@ -46,13 +46,13 @@ if(EXISTS ${TS_JAVA_BINDING} AND IS_DIRECTORY ${TS_JAVA_BINDING})
     add_executable(blockdb 
         ${CMAKE_SOURCE_DIR}/deps/tree-sitter-java/src/parser.c
         blockdb/src/main.c
-        blockdb/src/utils.c
+        blockdb/src/bdb_utils.c
+        blockdb/src/bdb_arr.c
         blockdb/src/print_tree.c
         blockdb/src/generate.c
     )
     target_include_directories(blockdb PRIVATE 
         ${TS_INCLUDE_DIRS}
-        ${CMAKE_SOURCE_DIR}/deps/tree-sitter-java/include
         blockdb/include
     )
     target_link_libraries(blockdb PRIVATE 
@@ -61,5 +61,5 @@ if(EXISTS ${TS_JAVA_BINDING} AND IS_DIRECTORY ${TS_JAVA_BINDING})
     )
 else()
     message(WARNING "tree-sitter-java was not found at ${TS_JAVA_BINDING}")
-    message(STATUS "blockdb will not be built")
+    message(STATUS "blockdb won't be built")
 endif()
