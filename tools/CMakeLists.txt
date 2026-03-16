@@ -47,8 +47,12 @@ if(EXISTS ${TS_JAVA_BINDING} AND IS_DIRECTORY ${TS_JAVA_BINDING})
         ${CMAKE_SOURCE_DIR}/deps/tree-sitter-java/src/parser.c
         blockdb/src/main.c
         blockdb/src/bdb_utils.c
+        blockdb/src/bdb_fs.c
         blockdb/src/bdb_arr.c
         blockdb/src/print_tree.c
+        blockdb/src/gen_vars.c
+        blockdb/src/gen_tree.c
+        blockdb/src/gen_assign.c
         blockdb/src/generate.c
     )
     target_include_directories(blockdb PRIVATE 
