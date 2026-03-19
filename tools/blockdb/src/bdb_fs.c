@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 
 #include "bdb_log.h"
+#include "gen_utils.h"
 
 #ifdef _WIN32
 #   define POSIX(x) _##x
@@ -16,41 +17,15 @@
 #   define POSIX(x) x
 #endif
 
+
 char *bdb__fs_cat_path(const char *a, const char *b)
 {
-    size_t len_a = 0;
-    size_t len_b = 0;
     size_t need_sep = 0;
     size_t len = 0;
     char *out = 0;
 
-    if(a)
-        len_a = strlen(a);
+    return bdb__sprintf("%s%s%s", a ? a : "", a && b && a[strlen(a) - 1] != BDB__PATH_SEP ? BDB__STRINGIFY(BDB__PATH_SEP) : "", b ? b : "");
 
-    if(b)
-        len_b = strlen(b);
-
-    if(len_a && len_b && a[len_a - 1] != '/')
-        need_sep = 1;
-
-    len = len_a + need_sep + len_b;
-
-    out = malloc(len + 1);
-    if(!out)
-        return 0;
-
-    if(len_a)
-        memcpy(out, a, len_a);
-
-    if(need_sep)
-        out[len_a] = '/';
-
-    if(len_b)
-        memcpy(out + len_a + need_sep, b, len_b);
-
-    out[len] = '\0';
-
-    return out;
 }
 
 int bdb__fs_is_file(const char *path)

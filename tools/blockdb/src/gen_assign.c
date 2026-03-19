@@ -1,7 +1,7 @@
 #include "gen_assign.h"
 
 #include "bdb_log.h"
-#include "bdb_utils.h"
+#include "gen_utils.h"
 #include "gen_vars.h"
 
 int bdb__gen_handle_assign(

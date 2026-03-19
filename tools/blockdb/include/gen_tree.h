@@ -40,7 +40,7 @@ void bdb__gen_build_tree(
         bdb__arr_t *classes /* bdb__gen_tn_t* */
 );
 
-void bdb__gen_merge_flags(
+int bdb__gen_merge_flags(
         const bdb__arr_t *vds, /* bdb__gen_var_desc_t */
         bdb__gen_tn_t *child,
         const bdb__gen_tn_t *parent

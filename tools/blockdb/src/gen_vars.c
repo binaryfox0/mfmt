@@ -1,6 +1,6 @@
 #include "gen_vars.h"
 
-#include "bdb_utils.h"
+#include "gen_utils.h"
 
 bdb__gen_var_desc_t* bdb__gen_var_desc_find(
         const bdb__arr_t *vds, 

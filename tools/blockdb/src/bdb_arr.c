@@ -8,10 +8,12 @@ int bdb__arr_ensure(bdb__arr_t *arr, const size_t idx)
 {
     size_t new_cap = 0;
     void *new_data = 0;
+    size_t old_count = 0;
 
     if(!arr)
         return -1;
 
+    old_count = arr->count;
     if(idx < arr->capacity)
     {
         if(idx >= arr->count)
@@ -32,13 +34,17 @@ int bdb__arr_ensure(bdb__arr_t *arr, const size_t idx)
     if(!new_data)
         return -1;
 
+    memset((uint8_t*)new_data + old_count * arr->elem_size,
+            0,
+            (idx + 1 - old_count) * arr->elem_size
+          );
+
     arr->data = new_data;
     arr->capacity = new_cap;
     arr->count = idx + 1;
 
     return 0;
 }
-
 int bdb__arr_append(bdb__arr_t *arr, const void *elem)
 {
     if(arr->count >= arr->capacity)

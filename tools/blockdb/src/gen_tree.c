@@ -41,49 +41,58 @@ void bdb__gen_build_tree(bdb__arr_t *classes)
     }
 }
 
-void bdb__gen_merge_flags(
+int bdb__gen_merge_flags(
         const bdb__arr_t *vds,
         bdb__gen_tn_t *child,
         const bdb__gen_tn_t *parent
 )
 {
-    if(!vds || !child || !parent)
-        return;
+    if (!vds || !child || !parent)
+        return -1;
 
-    for(size_t i = 0; i < vds->count; i++)
+    uint8_t *child_base  = (uint8_t *)child;
+    const uint8_t *parent_base = (const uint8_t *)parent;
+
+    for (size_t i = 0; i < vds->count; i++)
     {
-        bdb__gen_var_desc_t *vd = &bdb__arr_get(vds, bdb__gen_var_desc_t, i);
-        uint8_t *child_val = 0;
-        uint8_t *child_mask = 0;
-        const uint8_t *parent_val = 0;
+        bdb__gen_var_desc_t *vd =
+            &bdb__arr_get(vds, bdb__gen_var_desc_t, i);
 
-        int byte_offset = 0;
-        int bit_offset = 0;
-        uint8_t bit_mask = 0;
-
-        if(!vd->is_bool)
+        if (!vd->is_bool)
         {
             bdb__error("variable \"%s\" is not supported", vd->name);
-            bdb__info("support may be added in future version");
             continue;
         }
 
-        byte_offset = vd->bit_idx / 8;
-        bit_offset  = vd->bit_idx % 8;
+        /* bit location */
+        const int byte_off = vd->bit_idx >> 3;
+        const int bit_off  = vd->bit_idx & 7;
+        const uint8_t mask = (uint8_t)(1u << bit_off);
 
-        child_val  = ((uint8_t*)child)  + vd->out_offset + byte_offset;
-        child_mask = ((uint8_t*)child)  + vd->out_offset + vd->out_size + byte_offset;
-        parent_val = ((uint8_t*)parent) + vd->out_offset + byte_offset;
-        bit_mask = 1u << bit_offset;
+        /* layout:
+           [value bytes][mask bytes]
+        */
+        uint8_t *child_val =
+            child_base + vd->out_offset + byte_off;
 
-        if(!(*child_mask & bit_mask))
-        {
-            if(*parent_val & bit_mask)
-                *child_val |= bit_mask;
-            else
-                *child_val &= ~bit_mask;
-        }
+        uint8_t *child_written =
+            child_base + vd->out_offset + vd->out_size + byte_off;
+
+        const uint8_t *parent_val =
+            parent_base + vd->out_offset + byte_off;
+
+        /* skip if child explicitly set */
+        if (*child_written & mask)
+            continue;
+
+        /* inherit from parent */
+        if (*parent_val & mask)
+            *child_val |= mask;
+        else
+            *child_val &= (uint8_t)~mask;
     }
+
+    return 0;
 }
 
 void bdb__gen_resolve_tree(

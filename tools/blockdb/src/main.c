@@ -14,6 +14,9 @@ int main(int argc, char **argv)
         aparse_arg_string("dir", 0, 0, 
                 "Path to the directory contain Mindustry's source code\n"
         ),
+        aparse_arg_string("out", 0, 0, 
+                "Path to the output directory, must contain include/src subfolder\n"
+        ),
         aparse_arg_end_marker
     };
     aparse_arg commands[] = {
@@ -24,7 +27,7 @@ int main(int argc, char **argv)
         ),
         aparse_arg_subparser_impl("generate", generate_args, generate_command,
                 "Generate block database from Mindustry's source code", 
-                (int[]){0, 8}, 1
+                (int[]){0, 8, 8, 16}, 2
         ),
         aparse_arg_end_marker
     };
