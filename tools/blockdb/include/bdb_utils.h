@@ -9,4 +9,9 @@ int bdb__read_file(
         long *out_size
 );
 
+int bdb__confirm(
+        const char *label, 
+        const int default_ans
+);
+
 #endif

@@ -33,6 +33,7 @@ add_library(msav
     msav/src/msav_zlib.c
     msav/src/msav_arr.c
     msav/src/msav_object.c
+    msav/src/msav_blocks_gen.c
 )
 # temporarily public for development purposes
 target_link_libraries(msav PUBLIC 

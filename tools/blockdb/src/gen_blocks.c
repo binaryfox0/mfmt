@@ -124,12 +124,12 @@ static int bdb__gen_collect_block_variables(
     return 0;
 }
 
-int bdb__gen_parse_anonymous_class_body(
+static int bdb__gen_parse_anonymous_class_body(
         TSNode class_body,
         const char *src,
-        const bdb__arr_t *vds, /* bdb__gen_var_desc_t */
+        const bdb__arr_view_t *vds, /* bdb__gen_var_desc_t */
         const bdb__gen_tn_t *base_type,
-        bdb__gen_tn_t *instance
+        void *instance
 )
 {
     TSNode ctor_block = {0};
@@ -144,7 +144,7 @@ int bdb__gen_parse_anonymous_class_body(
         return -1;
     }
 
-    if (bdb__gen_scan_ctor_body(ctor_block, src, vds, instance) < 0)
+    if (bdb__gen_scan_ctor_body(vds, ctor_block, src, instance) < 0)
         return -1;
 
     if (bdb__gen_merge_flags(vds, instance, base_type) < 0)
@@ -156,8 +156,8 @@ int bdb__gen_parse_anonymous_class_body(
 int bdb__gen_parse_object_creation(
         TSNode node,
         const char *src,
+        const bdb__arr_view_t *vds, /* bdb__gen_var_desc_t */
         const bdb__arr_t *classes, /* bdb__gen_tn_t* */
-        const bdb__arr_t *vds, /* bdb__gen_var_desc_t */
         size_t var_idx,
         bdb__arr_t *instances
 )
@@ -214,8 +214,8 @@ int bdb__gen_parse_object_creation(
 int bdb__gen_parse_load_method(
         TSNode method,
         const char *src,
+        const bdb__arr_view_t *vds, /* bdb__gen_var_desc_t */
         const bdb__arr_t *classes, /* bdb__gen_tn_t* */
-        const bdb__arr_t *vds, /* bdb__gen_var_desc_t */
         bdb__arr_t *instances /* bdb__gen_tn_t */
 )
 {
@@ -267,7 +267,7 @@ int bdb__gen_parse_load_method(
         }
 
         if (bdb__gen_parse_object_creation(
-                right, src, classes, vds, var_idx, instances) < 0)
+                right, src, vds, classes, var_idx, instances) < 0)
         {
             bdb__error("failed to parse object creation");
             return -1; /* propagate */
@@ -281,7 +281,7 @@ int bdb__gen_parse_block_class(
         TSNode class_node,
         const char *src,
         const bdb__arr_t *classes,
-        bdb__arr_t *vds,
+        const bdb__arr_view_t *vds,
         bdb__arr_t *instances
 )
 {
@@ -324,7 +324,7 @@ int bdb__gen_parse_block_class(
             if (!bdb__tokcmp(src + s, "load", (size_t)(e - s)))
             {
                 if (bdb__gen_parse_load_method(
-                        node, src, classes, vds, instances) < 0)
+                        node, src, vds, classes, instances) < 0)
                     return -1;
             }
         }

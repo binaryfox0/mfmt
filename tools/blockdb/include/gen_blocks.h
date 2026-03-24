@@ -8,7 +8,7 @@ int bdb__gen_parse_block_class(
         TSNode class_node,
         const char *src,
         const bdb__arr_t *classes,
-        bdb__arr_t *vds,
+        const bdb__arr_view_t *vds,
         bdb__arr_t *instances
 );
 

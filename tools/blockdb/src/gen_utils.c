@@ -126,3 +126,4 @@ char* bdb__sprintf(const char *fmt, ...)
 
     return buf;
 }
+

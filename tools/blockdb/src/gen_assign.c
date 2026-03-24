@@ -4,60 +4,33 @@
 #include "gen_utils.h"
 #include "gen_vars.h"
 
-int bdb__gen_handle_assign(
-        const bdb__arr_t *vds,
-        const char *name,
-        size_t name_len,
-        TSNode right,
-        const char *src,
-        bdb__gen_tn_t *tn
+typedef int (*bdb__gen_handle_cb_t)(const bdb__gen_var_desc_t*, const char*, const size_t, void*);
+
+static int bdb__gen_handle_bit(
+        const bdb__gen_var_desc_t *vd,
+        const char *value,
+        const size_t value_len,
+        void *out
 )
 {
     int val = -1;
-    uint32_t rs = 0;
-    uint32_t re = 0;
-    size_t rlen = 0;
-
-    bdb__gen_var_desc_t *vd = 0;
     uint8_t *target = 0;
     uint8_t *mask = 0;
     int byte_offset = 0;
     int bit_offset = 0;
 
-    if(!vds || !name || !tn)
-        return -1;
-
-    vd = bdb__gen_var_desc_find(vds, name, name_len);
-    if(!vd)
-        return 0;
-
-    if(!vd->is_bool)
-    {
-        bdb__error("variable \"%s\" is not supported", vd->name);
-        bdb__info("support may be added in future version");
-        return 0; /* unsupported for now */
-    }
-
-    rs = ts_node_start_byte(right);
-    re = ts_node_end_byte(right);
-    rlen = re - rs;
-
-    if(!bdb__tokcmp(src + rs, "true", rlen))
+    if(!bdb__tokcmp(value, "true", value_len))
         val = 1;
-    else if(!bdb__tokcmp(src + rs, "false", rlen))
+    else if(!bdb__tokcmp(value, "false", value_len))
         val = 0;
     else
-    {
-        TSPoint p = {0};
-        p = ts_node_start_point(right);
-        bdb__error("invalid boolean value at %u, %u", p.row + 1, p.column + 1);
         return -1;
-    }
 
-    byte_offset = vd->bit_idx / 8;
-    bit_offset = vd->bit_idx % 8;
-    target = ((uint8_t*)tn) + vd->out_offset + byte_offset;
-    mask = ((uint8_t*)tn) + vd->out_offset + byte_offset + vd->out_size;
+    byte_offset = vd->offset / 8;
+    bit_offset = vd->offset % 8;
+    target = (uint8_t*)out + vd->parent->offset + byte_offset;
+    /* dubious expectation here */
+    mask = target + vd->parent->size;
 
     if(val)
         *target |= (1u << bit_offset);
@@ -68,20 +41,77 @@ int bdb__gen_handle_assign(
     return 0;
 }
 
+int bdb__gen_handle_assign(
+        const bdb__arr_view_t *vds,
+        const char *name,
+        size_t name_len,
+        TSNode right,
+        const char *src,
+        void *out
+)
+{
+    static const bdb__gen_handle_cb_t mapper[__BDB__GEN_VAR_MAX__] =
+    {
+        [BDB__GEN_VAR_BIT] = bdb__gen_handle_bit
+    };
+
+    int val = -1;
+    uint32_t rs = 0;
+    uint32_t re = 0;
+    size_t rlen = 0;
+
+    bdb__gen_var_desc_t *vd = 0;
+    bdb__gen_handle_cb_t func = 0;
+
+    if(!vds || !name || !out)
+        return -1;
+
+    vd = bdb__gen_var_desc_find(vds, name, name_len);
+    if(!vd)
+        return 0;
+
+    if(vd->kind < 0 || vd->kind >= __BDB__GEN_VAR_MAX__)
+    {
+        bdb__error("variable \"%s\" type: %d is not supported", vd->name, vd->kind);
+        bdb__info("support may be added in future version");
+        return 0;
+    }
+
+    func = mapper[vd->kind];
+    if(!func)
+    {
+        bdb__error("variable type: %d has no handler yet.", vd->kind);
+        bdb__info("support may be added in future version");
+        return 0; /* unsupported for now */
+    }
+
+    rs = ts_node_start_byte(right);
+    re = ts_node_end_byte(right);
+    rlen = re - rs;
+    if(func(vd, src + rs, rlen, out) < 0)
+    {
+        TSPoint sp = ts_node_start_point(right);
+        TSPoint ep = ts_node_end_point(right);
+        
+        bdb__error("value at %u,%u to %u,%u is invlaid for its type",
+                sp.row + 1, sp.column + 1, ep.row + 1, ep.column + 1);
+        bdb__info("value: \"%.*s\", type: %d", (int)rlen, src + rs, vd->kind);
+        return -1;
+    }
+    return 0;
+}
+
 int bdb__gen_handle_assign_expr(
-        const bdb__arr_t *vds,
+        const bdb__arr_view_t *vds,
         TSNode left,
         TSNode right,
         const char *src,
-        bdb__gen_tn_t *tn
+        void *out
 )
 {
     TSNode r = {0};
 
-    if(!vds || !src || !tn)
-        return -1;
-
-    if(ts_node_is_null(left) || ts_node_is_null(right))
+    if(!vds || ts_node_is_null(left) || ts_node_is_null(right) || !src || !out)
         return 0;
 
     r = right;
@@ -99,7 +129,7 @@ int bdb__gen_handle_assign_expr(
             break;
 
         /* recurse to assign inner variable */
-        if(bdb__gen_handle_assign_expr(vds, inner_left, inner_right, src, tn) < 0)
+        if(bdb__gen_handle_assign_expr(vds, inner_left, inner_right, src, out) < 0)
             return -1;
 
         r = inner_right;
@@ -111,7 +141,7 @@ int bdb__gen_handle_assign_expr(
         uint32_t s = ts_node_start_byte(left);
         uint32_t e = ts_node_end_byte(left);
 
-        return bdb__gen_handle_assign(vds, src + s, e - s, r, src, tn);
+        return bdb__gen_handle_assign(vds, src + s, e - s, r, src, out);
     }
     else if(!strcmp(ts_node_type(left), "field_access"))
     {
@@ -126,20 +156,24 @@ int bdb__gen_handle_assign_expr(
         s = ts_node_start_byte(field);
         e = ts_node_end_byte(field);
 
-        return bdb__gen_handle_assign(vds, src + s, e - s, r, src, tn);
+        return bdb__gen_handle_assign(vds, src + s, e - s, r, src, out);
     }
 
     return 0;
 }
 
 int bdb__gen_scan_ctor_body(
+        const bdb__arr_view_t *vds,
         TSNode node, 
         const char *src, 
-        const bdb__arr_t *vds,
-        bdb__gen_tn_t *tn
+        void *out
 )
 {
-    uint32_t count = ts_node_named_child_count(node);
+    uint32_t count = 0;
+    if(!vds || ts_node_is_null(node) || !src || !out)
+        return -1;
+
+    count = ts_node_named_child_count(node);
     for (uint32_t i = 0; i < count; i++)
     {
         TSNode stmt = {0};
@@ -162,7 +196,7 @@ int bdb__gen_scan_ctor_body(
         if (ts_node_is_null(left) || ts_node_is_null(right))
             continue;
 
-        ret = bdb__gen_handle_assign_expr(vds, left, right, src, tn);
+        ret = bdb__gen_handle_assign_expr(vds, left, right, src, out);
         if (ret < 0)
         {
             bdb__error("failed to process assignment");
@@ -173,14 +207,17 @@ int bdb__gen_scan_ctor_body(
 }
 
 int bdb__gen_scan_ctor(
+        const bdb__arr_view_t *vds,
         TSNode node, 
         const char *src, 
-        const bdb__arr_t *vds,
-        bdb__gen_tn_t *tn
+        void *out
 )
 {
     TSNode body = {0};
     uint32_t count = 0;
+    
+    if(!vds || ts_node_is_null(node) || !src || !out)
+        return -1;
 
     body = ts_node_child_by_field_name(node, "body", 4);
     if(ts_node_is_null(body))
@@ -204,7 +241,7 @@ int bdb__gen_scan_ctor(
 
         if(!ts_node_is_null(cbody))
         {
-            if(bdb__gen_scan_ctor_body(cbody, src, vds, tn) < 0)
+            if(bdb__gen_scan_ctor_body(vds, cbody, src, out) < 0)
                 return -1;
         }
     }

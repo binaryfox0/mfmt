@@ -41,14 +41,14 @@ void bdb__gen_build_tree(
 );
 
 int bdb__gen_merge_flags(
-        const bdb__arr_t *vds, /* bdb__gen_var_desc_t */
-        bdb__gen_tn_t *child,
-        const bdb__gen_tn_t *parent
+        const bdb__arr_view_t *vds, /* bdb__gen_var_desc_t */
+        void *child,
+        const void *parent
 );
 
 void bdb__gen_resolve_tree(
         bdb__gen_tn_t *tn,
-        const bdb__arr_t *vds /* bdb__gen_var_desc_t */
+        const bdb__arr_view_t *vds /* bdb__gen_var_desc_t */
 );
 
 #endif

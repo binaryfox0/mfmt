@@ -3,7 +3,17 @@
 
 #include <stddef.h>
 
-#define bdb__arr_get(arr, type, idx) (((type*)(arr)->data)[(idx)])
+#define bdb__arr_get(arr, type, idx) \
+    (((type*)(arr)->data)[(idx)])
+#define bdb__arr_get_base(arr, idx) \
+    ((uint8_t*)(arr)->data + (arr)->elem_size * (idx))
+
+typedef struct
+{
+    void *data;
+    size_t elem_size;
+    size_t count;
+} bdb__arr_view_t;
 
 typedef struct
 {

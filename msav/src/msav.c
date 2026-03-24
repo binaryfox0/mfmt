@@ -11,6 +11,8 @@
 #include "msav_stream.h"
 #include "msav_object.h"
 
+#include "msav_blocks_gen_priv.h"
+
 #define MSAV__ERROR aparse_prog_error
 #define MSAV__WARN aparse_prog_warn
 #define MSAV__INFO aparse_prog_info
@@ -208,7 +210,7 @@ void mfmtio_read_map(msav__rstream_t *stream, void *ptr)
 
     for(int i = 0; i < tile_count; i++)
     {
-        uint16_t block = 0;
+        int16_t block = 0;
         char packed_chk = 0;
         int had_entity = 0, had_data = 0;
         char data = 0, floor_data = 0, overlay_data = 0;
@@ -240,7 +242,9 @@ void mfmtio_read_map(msav__rstream_t *stream, void *ptr)
         {
             if(is_center)
             {
-                msav__skip_region(stream);     
+                if(msav_block__db[block].has_building)     
+                    msav__skip_region(stream);
+                // msav__skip_region(stream);     
             }
         } else if(!had_data)
         {
