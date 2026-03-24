@@ -4,14 +4,21 @@
 #include <string.h>
 
 #include "bdb_log.h"
+#include "bdb_ui.h"
 #include "gen_vars.h"
 
-void bdb__gen_build_tree(bdb__arr_t *classes)
+int bdb__gen_build_tree(bdb__arr_t *classes)
 {
+    if(!classes)
+        return -1;
+    
+    bdb__info("building inheritance tree from classes");
     for (size_t i = 0; i < classes->count; i++)
     {
         bdb__gen_tn_t *c = bdb__arr_get(classes, bdb__gen_tn_t*, i);
         bdb__gen_tn_t *parent = 0;
+
+        bdb_ui_progress(i + 1, classes->count);
 
         if (!c->parent_name)
             continue;
@@ -39,6 +46,8 @@ void bdb__gen_build_tree(bdb__arr_t *classes)
         c->parent = parent;
         bdb__arr_append(&parent->children, &c);
     }
+    bdb_ui_progress_end();
+    return 0;
 }
 
 int bdb__gen_merge_flags(
@@ -115,8 +124,8 @@ void bdb__gen_resolve_tree(
 
     if(tn->children.count == 0)
     {
-        bdb__info("%s -> %s, has_building: 0x%02X, modules_bitmask; 0x%02X", 
-                tn->name, tn->parent_name, tn->has_building, tn->modules_bitmask);
+        // bdb__info("%s -> %s, has_building: 0x%02X, modules_bitmask; 0x%02X", 
+        //         tn->name, tn->parent_name, tn->has_building, tn->modules_bitmask);
         return;
     }
 

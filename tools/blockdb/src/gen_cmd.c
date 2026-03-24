@@ -11,6 +11,7 @@
 #include "bdb_utils.h"
 #include "bdb_log.h"
 #include "bdb_fs.h"
+#include "bdb_ui.h"
 #include "bdb_arr.h"
 
 #include "gen_utils.h"
@@ -161,12 +162,16 @@ static int bdb__gen_parse_block_classes(
     long src_len = 0;
     TSTree *tree = 0;
 
+    bdb__info("collecting block files");
     if(bdb__fs_collect_files(path, &file_list) < 0)
         return -1;
+
+    bdb__info("parsing block classes");
     for(size_t i = 0; i < file_list.count; i++)
     {
         char *path = bdb__arr_get(&file_list, char*, i);
 
+        bdb_ui_progress(i + 1, file_list.count);
         if(bdb__read_file(path, &src, &src_len) < 0)
             continue;
 
@@ -183,6 +188,8 @@ static int bdb__gen_parse_block_classes(
         src = 0;
     }
     bdb__arr_destroy_strings(&file_list);
+    bdb_ui_progress_end();
+
     return 0;
 }
 

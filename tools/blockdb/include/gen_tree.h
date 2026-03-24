@@ -36,7 +36,7 @@ typedef struct bdb__gen_tn
     bdb__arr_t children; /* bdb__gen_tn_t* */
 } bdb__gen_tn_t;
 
-void bdb__gen_build_tree(
+int bdb__gen_build_tree(
         bdb__arr_t *classes /* bdb__gen_tn_t* */
 );
 

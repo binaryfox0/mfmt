@@ -6,10 +6,58 @@
 #include "bdb_log.h"
 #include "bdb_utils.h"
 #include "bdb_fs.h"
+#include "bdb_ui.h"
+
 #include "gen_utils.h"
 #include "gen_vars.h"
 
 #define BDB__INDENT 4
+
+const char *bdb__fs_fname(const char *path)
+{
+    const char *out = 0;
+    if(!path)
+        return 0;
+    out = strrchr(path, BDB_PATH_SEP);
+    return out ? out + 1 : path;
+}
+
+static FILE *bdb__open_file(
+        char **out_fname,
+        const char *dir,
+        const char *stem,
+        const char *ext)
+{
+    FILE *f = 0;
+    char *fname = 0;
+    char *path = 0;
+
+    if(out_fname) 
+        *out_fname = 0;
+
+    fname = bdb__sprintf("%s.%s", stem, ext);
+    path = bdb__fs_cat_path(dir, fname);
+    if(!path)
+        return 0;
+
+    f = fopen(path, "w");
+    if(!f)
+    {
+        bdb__error_errno("fopen failed");
+        free(fname);
+        free(path);
+        return 0;
+    }
+
+    if(out_fname)
+        *out_fname = fname;
+    else
+        free(fname);
+    free(path);
+
+    return f;
+}
+
 static inline void bdb__fprint_upper_path(
         FILE *file, 
         const char *str, 
@@ -26,6 +74,26 @@ static inline void bdb__fprint_upper_path(
             fputc(toupper((unsigned char)*p), file);
     }
 }
+
+static void bdb__emit_include_guard_begin(
+        FILE *f,
+        const char *file_name,
+        char sep)
+{
+    fputs("#ifndef ", f);
+    bdb__fprint_upper_path(f, file_name, sep);
+    fputc('\n', f);
+
+    fputs("#define ", f);
+    bdb__fprint_upper_path(f, file_name, sep);
+    fputc('\n', f);
+}
+
+static void bdb__emit_include_guard_end(FILE *f)
+{
+    fputs("\n#endif\n", f);
+}
+
 
 
 static void bdb__fprint_prefixed_upper(
@@ -52,100 +120,60 @@ static void bdb__fprint_prefixed_upper(
         fputc(toupper((unsigned char)*p), file);
     }
 }
-
 static int bdb__gen_emit_header(
         const bdb_gen_path_config_t *pc,
         const bdb__arr_t *arr,
         const bdb_gen_name_fmt_t *fmt)
 {
     int ret = -1;
-    char *dir_path = 0;
+
+    char *dir = 0;
     char *file_name = 0;
-    char *path = 0;
-    FILE *file = 0;
+    FILE *f = 0;
 
-    bdb__info("start to generate public header");
-
-    dir_path = bdb__fs_cat_path(pc->root_path, pc->include_dir);
-    if(!dir_path)
-    {
-        bdb__error("failed to construct header directory path");
+    dir = bdb__fs_cat_path(pc->root_path, pc->include_dir);
+    if(!dir)
         return -1;
-    }
 
-    ret = bdb__fs_ensure_dir(dir_path);
-    if(ret < 1)
-    {
-        if(ret == 0)
-            bdb__error("the action has been canceled by user");
-        goto cleanup;   
-    }
-
-    file_name = bdb__sprintf("%s%s%s", 
-            pc->stem, 
-            pc->header_ext && *pc->header_ext ? "." : "",
-            pc->header_ext ? pc->header_ext : "");
-    if(
-            !file_name ||
-            strlen(file_name) == 0
-    )
-    {
-        bdb__error("failed to construct header file name");
+    if(bdb__fs_ensure_dir(dir) < 1)
         goto cleanup;
-    }
 
-    path = bdb__fs_cat_path(dir_path, file_name);
-    if(!path)
-    {
-        bdb__error("failed to construct header path");
+    f = bdb__open_file(&file_name, dir, pc->stem, pc->header_ext);
+    if(!f)
         goto cleanup;
-    }
 
-    file = fopen(path, "w");
-    if(!file)
-    {
-        bdb__error_errno("failed to open output header path");
-        goto cleanup;
-    }
+    bdb__emit_include_guard_begin(f, file_name, fmt->sep);
 
-    fprintf(file, "#ifndef ");
-    bdb__fprint_upper_path(file, file_name, fmt->sep);
-    fputc('\n', file);
-    fprintf(file, "#define ");
-    bdb__fprint_upper_path(file, file_name, fmt->sep);
-    fputc('\n', file);
-
-    fputs("\ntypedef enum\n{\n", file);
+    bdb__info("generating blocks enum");
+    fputs("\ntypedef enum\n{\n", f);
     for(size_t i = 0; i < arr->count; i++)
     {
         const uint8_t *base = bdb__arr_get_base(arr, i);
         const char *name = *(const char**)(base + fmt->name_offset);
 
-        if(!name)
+        bdb_ui_progress(i + 1, arr->count);
+        if(!name) 
             continue;
 
-        fprintf(file, "%*s", BDB__INDENT, "");
-        bdb__fprint_prefixed_upper(file, fmt, name);
-        fputc(',', file);
-        fputc('\n', file);
+        fprintf(f, "%*s", BDB__INDENT, "");
+        bdb__fprint_prefixed_upper(f, fmt, name);
+        fputs(",\n", f);
     }
-    
-    fprintf(file, "%*s__", BDB__INDENT, "");
-    bdb__fprint_prefixed_upper(file, fmt, "max");
-    fprintf(file, "__\n");
+    fprintf(f, "%*s__", BDB__INDENT, "");
+    bdb__fprint_prefixed_upper(f, fmt, "max");
+    fputs("__\n", f);
 
-    fprintf(file, "} %s_t;\n\n#endif\n",
-            fmt->prefix);
-    fclose(file);
+    fprintf(f, "} %s_t;\n", fmt->prefix);
+    bdb_ui_progress_end();
 
-    bdb__info("generate public header successfully");
+    bdb__emit_include_guard_end(f);
+
     ret = 0;
 
 cleanup:
-    free(dir_path);
+    if(f) fclose(f);
+    free(dir);
     free(file_name);
-    free(path);
-
     return ret;
 }
 
@@ -171,201 +199,143 @@ static const char *bdb__gen_var_type(
     bdb__info("type: %d, size: %d", vd->kind, vd->size);
     return 0;
 }
-
 static int bdb__gen_emit_private_header(
         const bdb_gen_path_config_t *pc,
-        const char *dir_path,
+        const char *dir,
         const bdb__arr_view_t *vds,
-        const bdb_gen_name_fmt_t *fmt
-)
+        const bdb_gen_name_fmt_t *fmt)
 {
     int ret = -1;
     char *file_name = 0;
-    char *path = 0;
-    FILE *file = 0;
+    FILE *f = 0;
 
-    bdb__info("start to generate private header");
+    char *stem = bdb__sprintf("%s_priv", pc->stem);
+    if(!stem)
+        return -1;
 
-    file_name = bdb__sprintf("%s_priv%s%s", 
-            pc->stem, 
-            pc->header_ext && *pc->header_ext ? "." : "",
-            pc->header_ext ? pc->header_ext : "");
-    if(!file_name)
-    {
-        bdb__error("failed to construct private header file name");
+    f = bdb__open_file(&file_name, dir, stem, pc->header_ext);
+    if(!f)
         goto cleanup;
-    }
 
-    path = bdb__sprintf("%s%s%s",
-            dir_path ? dir_path : "",
-                dir_path &&
-                *dir_path &&
-                dir_path[strlen(dir_path) - 1] != BDB_PATH_SEP ?
-                    BDB__STRINGIFY(BDB_PATH_SEP) : "",
-            file_name
-    );
-    if(!path)
-    {
-        bdb__error("failed to construct private header path");
-        goto cleanup;
-    }
+    bdb__emit_include_guard_begin(f, file_name, fmt->sep);
 
-    file = fopen(path, "w");
-    if(!file)
-    {
-        bdb__error_errno("failed to open private header");
-        goto cleanup;
-    }
-    
-    fprintf(file, "#ifndef ");
-    bdb__fprint_upper_path(file, file_name, fmt->sep);
-    fputc('\n', file);
-    fprintf(file, "#define ");
-    bdb__fprint_upper_path(file, file_name, fmt->sep);
-    fputc('\n', file);
-
-    fputc('\n', file);
-
-    fprintf(file, "#include \"%s%s%s\"",
+    fprintf(f, "\n#include \"%s.%s\"\n\n",
             pc->stem,
-            pc->header_ext ? "." : "",
-            pc->header_ext ? pc->header_ext : ""
-    );
+            pc->header_ext ? pc->header_ext : "");
 
-    fputc('\n', file);
-
-    fputs("typedef struct\n{\n", file);
+    fputs("typedef struct\n{\n", f);
     for(size_t i = 0; i < vds->count; i++)
     {
-        bdb__gen_var_desc_t vd = bdb__arr_get(vds, bdb__gen_var_desc_t, i);
-        const char *type_name = bdb__gen_var_type(&vd);
+        bdb__gen_var_desc_t vd =
+            bdb__arr_get(vds, bdb__gen_var_desc_t, i);
 
-        if(!type_name)
+        const char *type = bdb__gen_var_type(&vd);
+        if(!type) 
             continue;
 
-        fprintf(file, "%*s%s %s;\n",
-                BDB__INDENT, "", type_name, vd.name);
+        fprintf(f, "%*s%s %s;\n",
+                BDB__INDENT, "", type, vd.name);
     }
 
-    fprintf(file, "} %s__data_t;\n\n", fmt->prefix);
+    fprintf(f, "} %s__data_t;\n\n", fmt->prefix);
 
-    fprintf(file, "extern %s__data_t %s__db[__",
-            fmt->prefix, fmt->prefix); 
-    bdb__fprint_prefixed_upper(file, fmt, "max");
-    fputs("__];\n", file);
+    fprintf(f, "extern %s__data_t %s__db[__",
+            fmt->prefix, fmt->prefix);
 
-    fputc('\n', file);
+    bdb__fprint_prefixed_upper(f, fmt, "max");
+    fputs("__];\n", f);
 
-    fputs("#endif\n", file);
-    fclose(file);
+    bdb__emit_include_guard_end(f);
 
     ret = 0;
-    bdb__info("generate private header successfully");
 
 cleanup:
+    if(f) fclose(f);
     free(file_name);
-    free(path);
+    free(stem);
     return ret;
 }
 
 static int bdb__gen_emit_source_file(
         const bdb_gen_path_config_t *pc,
-        const char *dir_path,
+        const char *dir,
         const bdb__arr_t *arr,
         const bdb__arr_view_t *vds,
-        const bdb_gen_name_fmt_t *fmt
-)
+        const bdb_gen_name_fmt_t *fmt)
 {
-    int ret = -1;
-    char *path = 0;
-    FILE *file = 0;
-    
-    bdb__info("start to generate source file");
+    FILE *f = 0;
 
-    path = bdb__fs_cat_fname(dir_path, pc->stem, pc->source_ext);
-    if(!path)
-    {
-        bdb__error("failed to construct source path");
-        goto cleanup;
-    }
-
-    file = fopen(path, "w");
-    if(!file)
-    {
-        bdb__error_errno("failed to open output source path");
+    f = bdb__open_file(0, dir, pc->stem, pc->source_ext);
+    if(!f)
         return -1;
-    }
 
-    fprintf(file, "#include \"%s%s%s\"\n",
+    fprintf(f, "#include \"%s.%s\"\n",
             pc->stem,
-            pc->header_ext && *pc->header_ext ? "." : "",
-            pc->header_ext ? pc->header_ext : ""
-    );
-    fprintf(file,
+            pc->header_ext ? pc->header_ext : "");
+
+    fprintf(f,
         "#include <stdint.h>\n"
-        "#include \"%s_priv%s%s\"\n",
+        "#include \"%s_priv.%s\"\n\n",
         pc->stem,
-        pc->header_ext && *pc->header_ext ? "." : "",
-        pc->header_ext ? pc->header_ext : ""
-    );
+        pc->header_ext ? pc->header_ext : "");
 
-    fputc('\n', file);
-
-    fprintf(file, "%s__data_t %s__db[__",
+    fprintf(f, "%s__data_t %s__db[__",
             fmt->prefix, fmt->prefix);
 
-    bdb__fprint_prefixed_upper(file, fmt, "max");
-    fputs("__] =\n{\n", file);
+    bdb__info("generating block database");
 
+    bdb__fprint_prefixed_upper(f, fmt, "max");
+    fputs("__] =\n{\n", f);
     for(size_t i = 0; i < arr->count; i++)
     {
         const uint8_t *base = bdb__arr_get_base(arr, i);
         const char *name = *(const char**)(base + fmt->name_offset);
 
-        fprintf(file, "%*s[", BDB__INDENT, "");
-        bdb__fprint_prefixed_upper(file, fmt, name);
-        fprintf(file, "] =\n%*s{\n", BDB__INDENT, "");
+        bdb_ui_progress(i + 1, arr->count);
+
+        if(!name) 
+            continue;
+
+        fprintf(f, "%*s[", BDB__INDENT, "");
+        bdb__fprint_prefixed_upper(f, fmt, name);
+        fprintf(f, "] =\n%*s{\n", BDB__INDENT, "");
 
         for(size_t j = 0; j < vds->count; j++)
         {
-            bdb__gen_var_desc_t vd = bdb__arr_get(vds, bdb__gen_var_desc_t, j);
+            bdb__gen_var_desc_t vd =
+                bdb__arr_get(vds, bdb__gen_var_desc_t, j);
 
             if(vd.kind != BDB__GEN_VAR_BITS)
-            {
-                bdb__error("unhandled variable \"%s\" to emit value", vd.name);
-                bdb__info("type: %d", vd.kind);
                 continue;
-            }
 
-            fprintf(file, "%*s.%s = 0x", BDB__INDENT * 2, "", vd.name);
+            fprintf(f, "%*s.%s = 0x",
+                    BDB__INDENT * 2, "", vd.name);
+
             for(int k = 0; k < vd.size; k++)
             {
-                uint8_t byte = base[vd.offset + (vd.size - 1 - k)];
-                fprintf(file, "%02X", byte);
+                uint8_t byte =
+                    base[vd.offset + (vd.size - 1 - k)];
+                fprintf(f, "%02X", byte);
             }
 
-            if(j != vds->count - 1)
-                fputc(',', file);
-            fputc('\n', file);
+            if(j + 1 < vds->count)
+                fputc(',', f);
+
+            fputc('\n', f);
         }
 
-        fprintf(file, "%*s}", BDB__INDENT, "");
+        fprintf(f, "%*s}", BDB__INDENT, "");
 
-        if(i != arr->count - 1)
-            fputc(',', file);
-        fputs("\n\n", file);
+        if(i + 1 < arr->count)
+            fputc(',', f);
+
+        fputs("\n\n", f);
     }
+    fputs("};\n", f);
+    bdb_ui_progress_end();
 
-    fputs("};\n", file);
-
-    fclose(file);
-    
-    bdb__info("generate source file successfully");
-    ret = 0;
-
-cleanup:
-    free(path);
-    return ret;
+    fclose(f);
+    return 0;
 }
 
 static int bdb__gen_emit_source(
@@ -378,7 +348,6 @@ static int bdb__gen_emit_source(
     char *dir_path = 0;
     char *file_name = 0;
 
-    bdb__info("start to generate sources");
     dir_path = bdb__fs_cat_path(pc->root_path, pc->src_dir);
     if(!dir_path)
     {

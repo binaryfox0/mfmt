@@ -48,6 +48,7 @@ if(EXISTS ${TS_JAVA_BINDING} AND IS_DIRECTORY ${TS_JAVA_BINDING})
         blockdb/src/main.c
         blockdb/src/bdb_utils.c
         blockdb/src/bdb_fs.c
+        blockdb/src/bdb_ui.c
         blockdb/src/bdb_arr.c
         blockdb/src/print_tree.c
         blockdb/src/gen_utils.c
