@@ -1,4 +1,7 @@
 #include "gen_utils.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 int bdb__tokcmp(const char *s1, const char *s2, const size_t l)
 {

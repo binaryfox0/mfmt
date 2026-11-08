@@ -1,4 +1,6 @@
 #include "gen_blocks.h"
+#include <stdlib.h>
+#include <string.h>
 
 #include "bdb_log.h"
 #include "gen_tree.h"
@@ -137,20 +139,33 @@ static int bdb__gen_parse_anonymous_class_body(
     if (ts_node_is_null(class_body) || !src || !vds || !base_type || !instance)
         return -1;
 
+    /* an anonymous class without an init block just sets nothing */
     ctor_block = bdb__gen_node_child_from_type(class_body, "block");
-    if (ts_node_is_null(ctor_block))
+    if (!ts_node_is_null(ctor_block) &&
+        bdb__gen_scan_ctor_body(vds, ctor_block, src, instance) < 0)
+        return -1;
+
+    /* inherit everything not explicitly set */
+    return bdb__gen_merge_flags(vds, instance, base_type);
+}
+
+/* resolve Foo, Foo<T> or a.b.Foo to the identifier node "Foo" */
+static TSNode bdb__gen_creation_type_node(TSNode child)
+{
+    const char *type = ts_node_type(child);
+
+    if (!strcmp(type, "generic_type") && ts_node_named_child_count(child) > 0)
     {
-        bdb__error("anonymous class missing constructor block");
-        return -1;
+        child = ts_node_named_child(child, 0);
+        type = ts_node_type(child);
     }
-
-    if (bdb__gen_scan_ctor_body(vds, ctor_block, src, instance) < 0)
-        return -1;
-
-    if (bdb__gen_merge_flags(vds, instance, base_type) < 0)
-        return -1;
-
-    return 0;
+    if (!strcmp(type, "scoped_type_identifier"))
+    {
+        uint32_t n = ts_node_named_child_count(child);
+        if (n > 0)
+            return ts_node_named_child(child, n - 1);
+    }
+    return child;
 }
 
 int bdb__gen_parse_object_creation(
@@ -164,9 +179,13 @@ int bdb__gen_parse_object_creation(
 {
     uint32_t count = 0;
     bdb__gen_tn_t *base_type = 0;
+    bdb__gen_tn_t *instance = 0;
+    int merged = 0;
 
     if (ts_node_is_null(node) || !src || !classes || !vds || !instances)
         return -1;
+
+    instance = &bdb__arr_get(instances, bdb__gen_tn_t, var_idx);
 
     count = ts_node_child_count(node);
 
@@ -178,8 +197,11 @@ int bdb__gen_parse_object_creation(
 
         const char *type = ts_node_type(child);
 
-        if (!strcmp(type, "type_identifier"))
+        if (!strcmp(type, "type_identifier") ||
+            !strcmp(type, "generic_type") ||
+            !strcmp(type, "scoped_type_identifier"))
         {
+            child = bdb__gen_creation_type_node(child);
             uint32_t s = ts_node_start_byte(child);
             uint32_t e = ts_node_end_byte(child);
 
@@ -199,14 +221,17 @@ int bdb__gen_parse_object_creation(
                 return -1;
             }
 
-            bdb__gen_tn_t *instance =
-                &bdb__arr_get(instances, bdb__gen_tn_t, var_idx);
-
             if (bdb__gen_parse_anonymous_class_body(
                     child, src, vds, base_type, instance) < 0)
                 return -1;
+            merged = 1;
         }
     }
+
+    /* plain "new Foo(...)" with no body: still inherit from Foo */
+    if (!merged && base_type &&
+        bdb__gen_merge_flags(vds, instance, base_type) < 0)
+        return -1;
 
     return 0;
 }

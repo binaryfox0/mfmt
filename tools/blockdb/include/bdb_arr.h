@@ -2,6 +2,7 @@
 #define BLOCKDB_ARR_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #define bdb__arr_get(arr, type, idx) \
     (((type*)(arr)->data)[(idx)])

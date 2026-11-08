@@ -1,6 +1,8 @@
 #ifndef BLOCKDB_LOG_H
 #define BLOCKDB_LOG_H
 
+#include <errno.h>
+#include <string.h>
 #include <aparse.h>
 
 #define bdb__error aparse_prog_error

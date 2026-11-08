@@ -26,7 +26,7 @@ int bdb__gen_build_tree(bdb__arr_t *classes)
         for (size_t j = 0; j < classes->count; j++)
         {
             bdb__gen_tn_t *c2 = bdb__arr_get(classes, bdb__gen_tn_t*, j);
-            if (!strcmp(c2->name, c->parent_name))
+            if (c2 != c && !strcmp(c2->name, c->parent_name))
             {
                 parent = c2;
                 break;
@@ -38,13 +38,19 @@ int bdb__gen_build_tree(bdb__arr_t *classes)
             parent = calloc(1, sizeof(*parent));
             if(!parent)
                 continue;
-            bdb__arr_append(classes, &parent);
             parent->name = strdup(c->parent_name);
+            if(!parent->name || bdb__arr_append(classes, &parent) < 0)
+            {
+                free(parent->name);
+                free(parent);
+                continue;
+            }
             parent->children.elem_size = sizeof(void*);
         }
 
+        if(bdb__arr_append(&parent->children, &c) < 0)
+            continue;
         c->parent = parent;
-        bdb__arr_append(&parent->children, &c);
     }
     bdb_ui_progress_end();
     return 0;

@@ -1,6 +1,8 @@
 #ifndef BLOCKDB_GEN_UTILS_H
 #define BLOCKDB_GEN_UTILS_H
 
+#include <stddef.h>
+#include <stdarg.h>
 #include <tree_sitter/api.h>
 
 #define BDB__STRINGIFY(c) (char[2]){(c), 0}

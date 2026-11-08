@@ -1,4 +1,5 @@
 #include "gen_assign.h"
+#include <string.h>
 
 #include "bdb_log.h"
 #include "gen_utils.h"

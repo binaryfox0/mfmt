@@ -73,6 +73,13 @@ static int bdb__gen_parse_class(
                 if(!ts_node_is_null(base))
                     type = base;
             }
+            /* a.b.Foo -> Foo */
+            if(!strcmp(ts_node_type(type), "scoped_type_identifier"))
+            {
+                uint32_t n = ts_node_named_child_count(type);
+                if(n > 0)
+                    type = ts_node_named_child(type, n - 1);
+            }
 
             s = ts_node_start_byte(type);
             e = ts_node_end_byte(type);
@@ -85,11 +92,18 @@ static int bdb__gen_parse_class(
     {
         free(tn->name);
         free(tn->parent_name);
+        bdb__arr_destroy(&tn->children);
         free(tn);
         return -1;
     }
 
-    bdb__arr_append(classes, &tn);
+    if(bdb__arr_append(classes, &tn) < 0)
+    {
+        free(tn->name);
+        free(tn->parent_name);
+        free(tn);
+        return -1;
+    }
 
 //    bdb__info("%s -> %s, has_building: 0x%02X, modules_bitmask; 0x%02X", 
 //            tn->name, tn->parent_name, tn->has_building, tn->modules_bitmask);
