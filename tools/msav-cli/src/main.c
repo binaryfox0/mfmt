@@ -391,11 +391,11 @@ int main(int argc, char** argv)
     };
     aparse_arg subparsers[] = {
         aparse_arg_subparser_impl("extract", extract_args, 
-                extract_command, "Extract specified file from Mindustry save archive (.zip)", 
-                (int[]){0, 8, 8, 8, 16, 8}, 3),
+                extract_command, NULL, 0, "Extract specified file from Mindustry save archive (.zip)", 
+                (size_t[]){0, 8, 8, 8, 16, 8}, 3),
         aparse_arg_subparser_impl("decode", decode_args, 
-                decode_command, "Decode given Mindustry save file (.msav)",
-                (int[]){0, 8}, 1),
+                decode_command, NULL, 0, "Decode given Mindustry save file (.msav)",
+                (size_t[]){0, sizeof(void*)}, 1),
         aparse_arg_end_marker
     };
     aparse_arg main_args[] = {

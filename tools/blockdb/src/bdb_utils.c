@@ -48,11 +48,11 @@ int bdb__confirm(
     {
         /* prompt */
         if (default_ans)
-            fprintf(stdout, "%s: " __aparse_info_label ": %s (Y/n): ", 
-                    __aparse_progname, label);
+            fprintf(stdout, "%s: " APARSE__INFO_LABEL ": %s (Y/n): ", 
+                    aparse_progname, label);
         else
-            fprintf(stdout, "%s: " __aparse_info_label ": %s (y/N): ", 
-                    __aparse_progname, label);
+            fprintf(stdout, "%s: " APARSE__INFO_LABEL ": %s (y/N): ", 
+                    aparse_progname, label);
 
         seen = 0;
         while ((c = getchar()) != '\n' && c != EOF)

@@ -2,10 +2,10 @@
 
 #include <stdlib.h>
 
-#include "msav_stream.h"
+#include <mfmtio.h>
 
 /* readObject */
-int msav__obj_read(msav__rstream_t *stream, msav__obj_t *obj)
+int msav__obj_read(mfmtio_rstream_t *stream, msav__obj_t *obj)
 {
     int8_t type = 0;
     int exists = 0;

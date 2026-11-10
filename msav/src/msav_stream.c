@@ -3,33 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-char* mfmtio_read_utf(msav__rstream_t *stream)
-{
-    int16_t len = 0;
-    char *out = 0;
-
-    len = mfmtio_read_i16(stream);
-    if(len <= 0)
-        return 0;
-
-    if(stream->idx + (uint32_t)(len - 1) >= stream->bufsz
-            || stream->eos)
-    {
-        stream->eos = 1;
-        return 0;
-    }
-    out = malloc(len + 1);
-    if(!out)
-    {
-        stream->oom = 1;
-        return 0;
-    }
-    for(int16_t i = 0; i < len; i++)
-        out[i] = mfmtio_read_i8(stream);
-    out[len] = '\0';
-    return out;
-}
-
 int msav__wensure(msav__wstream_t *s, const uint32_t extra)
 {
     uint32_t need = 0;

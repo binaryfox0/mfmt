@@ -1,5 +1,5 @@
-#ifndef MSAV_STREAM_H
-#define MSAV_STREAM_H
+#ifndef MFMTIO_H
+#define MFMTIO_H
 
 #include <stdint.h>
 #include <string.h>

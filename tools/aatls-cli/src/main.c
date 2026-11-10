@@ -183,7 +183,7 @@ int confirm(const char *label)
 
     while(1)
     {
-        printf("%s: " __aparse_ansies("\x1b[1;34m") "info" __aparse_ansies("\x1b[0m") ": %s (y/n): ", __aparse_progname, label); 
+        printf("%s: " APARSE__INFO_LABEL ": %s (y/n): ", aparse_progname, label); 
         if(!fgets(buf, sizeof(buf), stdin))
             return 0;
         p = buf;
@@ -403,10 +403,10 @@ int main(int argc, char **argv)
     };
 
     aparse_arg commands[] = {
-        aparse_arg_subparser_impl("list-all", list_all_args, 
-                list_all_command, 0, 0, 0),
+        aparse_arg_subparser("list-all", list_all_args, 
+                list_all_command, NULL, 0, 0),
         aparse_arg_subparser("extract-regions", extract_regions_args, 
-                extract_regions_command, "Extract regions from atlas",
+                extract_regions_command, NULL, 0, "Extract regions from atlas",
                 extract_regions_data_t, imgdir, outdir),
         aparse_arg_end_marker
     };

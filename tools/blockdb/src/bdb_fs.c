@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include "bdb_fs.h"
 
+#include <stdio.h>
 #include <string.h>
 #include <stddef.h>
 #include <errno.h>

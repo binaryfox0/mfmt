@@ -217,8 +217,8 @@ typedef struct
     };
 } msav__obj_t;
 
-typedef struct msav__rstream msav__rstream_t;
-int msav__obj_read(msav__rstream_t *stream, msav__obj_t *obj);
+typedef struct mfmtio_rstream mfmtio_rstream_t;
+int msav__obj_read(mfmtio_rstream_t *stream, msav__obj_t *obj);
 void msav__obj_destroy(msav__obj_t *obj);
 
 #endif

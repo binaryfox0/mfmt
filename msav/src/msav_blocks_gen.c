@@ -1474,6 +1474,12 @@ msav_block__data_t msav_block__db[__MSAV_BLOCK_MAX__] =
         .modules_bitmask = 0x00
     },
 
+    [MSAV_BLOCK_TARGET_DUMMY] =
+    {
+        .has_building = 0x01,
+        .modules_bitmask = 0x00
+    },
+
     [MSAV_BLOCK_RADAR] =
     {
         .has_building = 0x01,
@@ -1490,12 +1496,6 @@ msav_block__data_t msav_block__db[__MSAV_BLOCK_MAX__] =
     {
         .has_building = 0x01,
         .modules_bitmask = 0x03
-    },
-
-    [MSAV_BLOCK_BARRIER_PROJECTOR] =
-    {
-        .has_building = 0x00,
-        .modules_bitmask = 0x00
     },
 
     [MSAV_BLOCK_SHOCKWAVE_TOWER] =
@@ -1734,7 +1734,7 @@ msav_block__data_t msav_block__db[__MSAV_BLOCK_MAX__] =
 
     [MSAV_BLOCK_LIQUID_JUNCTION] =
     {
-        .has_building = 0x01,
+        .has_building = 0x02,
         .modules_bitmask = 0x04
     },
 
@@ -1764,7 +1764,7 @@ msav_block__data_t msav_block__db[__MSAV_BLOCK_MAX__] =
 
     [MSAV_BLOCK_REINFORCED_LIQUID_JUNCTION] =
     {
-        .has_building = 0x01,
+        .has_building = 0x02,
         .modules_bitmask = 0x04
     },
 
@@ -2501,6 +2501,12 @@ msav_block__data_t msav_block__db[__MSAV_BLOCK_MAX__] =
     },
 
     [MSAV_BLOCK_CANVAS] =
+    {
+        .has_building = 0x02,
+        .modules_bitmask = 0x00
+    },
+
+    [MSAV_BLOCK_LARGE_CANVAS] =
     {
         .has_building = 0x02,
         .modules_bitmask = 0x00

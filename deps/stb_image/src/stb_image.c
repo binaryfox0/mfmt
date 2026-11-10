@@ -5,4 +5,5 @@
 #define STBI_NO_PSD
 #define STBI_NO_GIF
 #define STBI_NO_HDR
+#define STBI_NO_LINEAR
 #include "stb_image.h"

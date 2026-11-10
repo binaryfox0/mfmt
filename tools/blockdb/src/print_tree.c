@@ -17,7 +17,7 @@
 #define ANSI_FG_CYAN    "\x1b[36m"
 #define ANSI_FG_GRAY    "\x1b[90m"
 
-#define bdb__colorize(col, str) __aparse_ansies(col) str __aparse_ansies(ANSI_RESET)
+#define bdb__colorize(col, str) APARSE__ANSI_ESCAPE(col) str APARSE__ANSI_ESCAPE(ANSI_RESET)
 
 static void bdb__print_ast(
         TSTreeCursor *cursor,

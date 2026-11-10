@@ -37,10 +37,12 @@ int main(int argc, char **argv)
     aparse_arg commands[] = {
         aparse_arg_subparser_impl(
                 "print-tree", print_tree_args, print_tree_command, 
+                NULL, 0,
                 "Print AST of a Java source file", 
-                (int[]){0, 8}, 1
+                (size_t[]){0, 8}, 1
         ),
         aparse_arg_subparser("generate", generate_args, bdb_gen_main,
+                NULL, 0,
                 "Generate block database from Mindustry's source code", 
                 bdb_gen_args_t, mindustry_root, root_path, include_dir, src_dir, 
                 stem, header_ext, source_ext

@@ -1,6 +1,7 @@
 #include "msav_zlib.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 #include <zlib-ng.h>
 
