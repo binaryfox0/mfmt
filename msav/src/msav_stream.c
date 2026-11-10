@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "mfmtio_alloc_priv.h"
+
 int msav__wensure(msav__wstream_t *s, const uint32_t extra)
 {
     uint32_t need = 0;
@@ -20,7 +22,7 @@ int msav__wensure(msav__wstream_t *s, const uint32_t extra)
 
     uint8_t *nbuf = realloc(s->buf, new_cap);
     if(!nbuf){
-        s->err = MSAV_ERR_OUT_OF_MEM;
+        s->err = MSAV_ERR_NO_MEM;
         return 0;
     }
 

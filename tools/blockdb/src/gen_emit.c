@@ -167,6 +167,7 @@ static int bdb__gen_emit_header(
     fputs("__\n", f);
 
     fprintf(f, "} %s_t;\n", fmt->prefix);
+    fprintf(f, "\nconst char *%s_name(%s id);\n", fmt->prefix, fmt->type_name);
     bdb_ui_progress_end();
 
     bdb__emit_include_guard_end(f);
@@ -335,6 +336,35 @@ static int bdb__gen_emit_source_file(
         fputs("\n\n", f);
     }
     fputs("};\n", f);
+
+    fprintf(f, "\nstatic const char *const %s__names[__", fmt->prefix);
+    bdb__fprint_prefixed_upper(f, fmt, "max");
+    fputs("__] =\n{\n", f);
+    for(size_t i = 0; i < arr->count; i++)
+    {
+        const uint8_t *base = bdb__arr_get_base(arr, i);
+        const char *name = *(const char**)(base + fmt->name_offset);
+
+        if(!name)
+            continue;
+
+        fprintf(f, "%*s[", BDB__INDENT, "");
+        bdb__fprint_prefixed_upper(f, fmt, name);
+        fprintf(f, "] = \"%s\",\n", name);
+    }
+    fputs("};\n\n", f);
+    fprintf(f,
+        "const char *%s_name(%s id)\n"
+        "{\n"
+        "%*sif ((unsigned int)id >= (unsigned int)__",
+        fmt->prefix, fmt->type_name, BDB__INDENT, "");
+    bdb__fprint_prefixed_upper(f, fmt, "max");
+    fprintf(f,
+        "__)\n"
+        "%*sreturn 0;\n"
+        "%*sreturn %s__names[id];\n"
+        "}\n",
+        BDB__INDENT * 2, "", BDB__INDENT, "", fmt->prefix);
     bdb_ui_progress_end();
 
     fclose(f);

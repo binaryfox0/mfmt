@@ -3,16 +3,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <aparse.h>
 #include <mfmtio.h>
 #include <zlib-ng.h>
 
 #include "msav_zlib.h"
+#include "mfmtio_alloc_priv.h"
+#include "msav_log_priv.h"
+#include "msav_blocks_gen.h"
 
-#define MSAV__ERROR aparse_prog_error
-#define MSAV__WARN aparse_prog_warn
-#define MSAV__INFO aparse_prog_info
-#define MSAV__DEBUG aparse_prog_debug
 #define MSAV__ARRSZ(array) (sizeof(array) / sizeof((array)[0]))
 
 static const uint8_t msav__header[] = {'M', 'S', 'A', 'V'};
@@ -130,7 +128,7 @@ static msav_err_t msav__read_chunk_common(
     const char *format = legacy_length ? "legacy-u16" : "i32";
 
     if(!stream || !reader || !name || !payload_read)
-        return MSAV_ERR_INVALID_ARG;
+        return MSAV_ERR_PARAM;
     if(!msav__has_bytes(stream, prefix_size))
     {
         MSAV__ERROR("chunk '%s': missing %s length at offset 0x%08X",
@@ -313,13 +311,13 @@ static msav_err_t msav__read_map(
         return MSAV_ERR_CORRUPT;
     }
 
-    floors = calloc(tile_count, sizeof(*floors));
-    ores = calloc(tile_count, sizeof(*ores));
-    blocks = calloc(tile_count, sizeof(*blocks));
+    floors = mfmtio__calloc(tile_count, sizeof(*floors));
+    ores = mfmtio__calloc(tile_count, sizeof(*ores));
+    blocks = mfmtio__calloc(tile_count, sizeof(*blocks));
     if(!floors || !ores || !blocks)
     {
         MSAV__ERROR("map: unable to allocate %u tiles", tile_count);
-        rc = MSAV_ERR_OUT_OF_MEM;
+        rc = MSAV_ERR_NO_MEM;
         goto cleanup;
     }
 
@@ -438,6 +436,15 @@ static msav_err_t msav__read_map(
         }
     }
 
+    for(uint32_t i = 0; i < tile_count; i++)
+    {
+        int16_t block = blocks[i];
+        const char *name = msav_block_name((msav_block_t)block);
+
+        MSAV__DEBUG("map block at (%u,%u): id=%d name=%s",
+                i % width, i / width, block, name ? name : "unknown");
+    }
+
     MSAV__INFO("map decoded: width=%u height=%u tiles=%u", width, height, tile_count);
     msav__dump_map(floors, width, height, "floors_dump.txt");
     msav__dump_map(ores, width, height, "ores_dump.txt");
@@ -448,9 +455,9 @@ malformed_map:
     MSAV__ERROR("map: malformed tile data at offset 0x%08X", stream->idx);
 
 cleanup:
-    free(floors);
-    free(ores);
-    free(blocks);
+    mfmtio__free(floors);
+    mfmtio__free(ores);
+    mfmtio__free(blocks);
     return rc;
 }
 
@@ -501,7 +508,7 @@ msav_err_t msav_parse_from_memory(
     if(!buf || bufsz == 0)
     {
         MSAV__ERROR("parse: input buffer is empty");
-        return MSAV_ERR_INVALID_ARG;
+        return MSAV_ERR_PARAM;
     }
 
     zlib_rc = msav__decompress(buf, (int64_t)bufsz, &decompressed_buf, &decompressed_bufsz);
@@ -514,7 +521,7 @@ msav_err_t msav_parse_from_memory(
     }
     else if(zlib_rc == Z_DATA_ERROR)
     {
-        free(decompressed_buf);
+        mfmtio__free(decompressed_buf);
         decompressed_buf = NULL;
         decompressed_bufsz = 0;
         MSAV__INFO("input is not a zlib stream; parsing as raw save data");
@@ -522,8 +529,8 @@ msav_err_t msav_parse_from_memory(
     else
     {
         MSAV__ERROR("decompression failed: zlib result=%d", zlib_rc);
-        free(decompressed_buf);
-        return MSAV_ERR_ZLIB;
+        mfmtio__free(decompressed_buf);
+        return MSAV_ERR_COMPRESS;
     }
 
     stream.buf = use_decompressed ? decompressed_buf : buf;
@@ -585,7 +592,7 @@ msav_err_t msav_parse_from_memory(
 
 cleanup:
     if(use_decompressed)
-        free(decompressed_buf);
+        mfmtio__free(decompressed_buf);
     return rc;
 }
 
@@ -600,7 +607,7 @@ msav_err_t msav_parse(const char *file_name, msav_file_t *out)
     if(!file_name)
     {
         MSAV__ERROR("parse: file name is null");
-        return MSAV_ERR_INVALID_ARG;
+        return MSAV_ERR_PARAM;
     }
 
     file = fopen(file_name, "rb");
@@ -624,19 +631,19 @@ msav_err_t msav_parse(const char *file_name, msav_file_t *out)
         return MSAV_ERR_CORRUPT;
     }
 
-    file_data = malloc(file_size ? (size_t)file_size : 1);
+    file_data = mfmtio__malloc(file_size ? (size_t)file_size : 1);
     if(!file_data)
     {
         MSAV__ERROR("could not allocate %ld bytes for '%s'", file_size, file_name);
         fclose(file);
-        return MSAV_ERR_OUT_OF_MEM;
+        return MSAV_ERR_NO_MEM;
     }
 
     read_size = fread(file_data, 1, (size_t)file_size, file);
     if(read_size != (size_t)file_size || ferror(file))
     {
         MSAV__ERROR("could not read save file '%s' completely", file_name);
-        free(file_data);
+        mfmtio__free(file_data);
         fclose(file);
         return MSAV_ERR_IO;
     }
@@ -644,7 +651,7 @@ msav_err_t msav_parse(const char *file_name, msav_file_t *out)
 
     MSAV__INFO("opened save file '%s': %zu bytes", file_name, read_size);
     rc = msav_parse_from_memory(file_data, (uint32_t)read_size, out);
-    free(file_data);
+    mfmtio__free(file_data);
     return rc;
 }
 

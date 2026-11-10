@@ -15,9 +15,36 @@
 #include <zlib-ng.h>
 
 #include <msav.h>
+#include <msav_log.h>
 
 #define error aparse_prog_error
 #define info aparse_prog_info
+
+static void msav_cli_log(
+        void *userdata,
+        msav_log_level_t level,
+        const char *message)
+{
+    (void)userdata;
+
+    switch(level)
+    {
+        case MSAV_LOG_DEBUG:
+            aparse_prog_debug("%s", message);
+            break;
+        case MSAV_LOG_INFO:
+            aparse_prog_info("%s", message);
+            break;
+        case MSAV_LOG_WARN:
+            aparse_prog_warn("%s", message);
+            break;
+        case MSAV_LOG_ERROR:
+            aparse_prog_error("%s", message);
+            break;
+        default:
+            break;
+    }
+}
 
 typedef struct msav_meta
 {
@@ -402,6 +429,8 @@ int main(int argc, char** argv)
         aparse_arg_parser("command", subparsers),
         aparse_arg_end_marker
     };
+
+    msav_log_set(msav_cli_log, NULL, MSAV_LOG_DEBUG);
 
     if(aparse_parse(argc, argv, main_args, 0, "Mindustry's save file inspector") != APARSE_STATUS_OK)
         return 1;

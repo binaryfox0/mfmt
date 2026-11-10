@@ -433,4 +433,6 @@ typedef enum
     __MSAV_BLOCK_MAX__
 } msav_block_t;
 
+const char *msav_block_name(msav_block_t id);
+
 #endif

@@ -7,6 +7,8 @@
 #include "aatls_arr.h"
 #include <mfmtio.h>
 
+#include "mfmtio_alloc_priv.h"
+
 #define AATLS__ARRSZ(arr) (sizeof((arr)) / sizeof((arr)[0]))
 #define AATLS__TYPE_ARRSZ(t, a) (AATLS__ARRSZ(((t*)0)->a))
 #define AATLS__IN_RANGE(val, beg, end) \
@@ -365,9 +367,10 @@ aatls_err_t aatls_write_to_memory(
     }
 
     // truncate
-    *out_buf = realloc(stream.buf, stream.size);
-    if(!out_buf)
-        *out_buf = stream.buf;
+    uint8_t *shrunk_buf = realloc(stream.buf, stream.size);
+    if(shrunk_buf)
+        stream.buf = shrunk_buf;
+    *out_buf = stream.buf;
     *out_size = stream.size;
 
     return AATLS_ERR_OK;

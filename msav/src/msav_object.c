@@ -4,6 +4,8 @@
 
 #include <mfmtio.h>
 
+#include "mfmtio_alloc_priv.h"
+
 /* readObject */
 int msav__obj_read(mfmtio_rstream_t *stream, msav__obj_t *obj)
 {

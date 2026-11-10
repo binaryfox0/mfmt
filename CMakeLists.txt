@@ -23,6 +23,7 @@ endfunction()
 
 add_library(mfmtio
     mfmtio/src/mfmtio.c
+    mfmtio/src/mfmtio_alloc.c
 )
 target_include_directories(mfmtio PUBLIC
     mfmtio/include
@@ -30,6 +31,7 @@ target_include_directories(mfmtio PUBLIC
 
 add_library(msav 
     msav/src/msav.c
+    msav/src/msav_log.c
     msav/src/msav_zlib.c
     msav/src/msav_arr.c
     msav/src/msav_object.c
@@ -44,6 +46,9 @@ target_link_libraries(msav PUBLIC
 target_include_directories(msav PUBLIC
     msav/include
 )
+target_include_directories(msav PRIVATE
+    mfmtio/src
+)
 target_add_asan(msav)
 
 add_library(aatls
@@ -52,6 +57,9 @@ add_library(aatls
 )
 target_include_directories(aatls PUBLIC 
     aatls/include
+)
+target_include_directories(aatls PRIVATE
+    mfmtio/src
 )
 target_link_libraries(aatls PRIVATE
     mfmtio

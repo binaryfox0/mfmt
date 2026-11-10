@@ -5,6 +5,8 @@
 
 #include <zlib-ng.h>
 
+#include "mfmtio_alloc_priv.h"
+
 typedef struct
 {
     uint8_t *data;

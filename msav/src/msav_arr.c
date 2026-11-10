@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "mfmtio_alloc_priv.h"
+
 int msav__arr_create(
         msav__arr_t *arr, 
         const size_t elem_size, 

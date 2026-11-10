@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "mfmtio_alloc_priv.h"
+
 char* mfmtio_read_utf(mfmtio_rstream_t *stream)
 {
     int16_t len = 0;

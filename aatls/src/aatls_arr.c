@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "mfmtio_alloc_priv.h"
+
 #define AATLS__MIN(a, b) ((a) < (b) ? (a) : (b))
 
 int aatls__arr_ensure(
