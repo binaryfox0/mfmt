@@ -58,6 +58,7 @@ if(EXISTS ${TS_JAVA_BINDING} AND IS_DIRECTORY ${TS_JAVA_BINDING})
         blockdb/src/bdb_gen_blocks.c
         blockdb/src/bdb_gen_emit.c
         blockdb/src/bdb_gen_cmd.c
+        blockdb/src/bdb_entity_gen.c
     )
     target_include_directories(blockdb PRIVATE 
         ${TS_INCLUDE_DIRS}
