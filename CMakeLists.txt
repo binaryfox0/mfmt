@@ -31,6 +31,7 @@ target_include_directories(mfmtio PUBLIC
 
 add_library(msav 
     msav/src/msav.c
+    msav/src/msav_ubjson.c
     msav/src/msav_log.c
     msav/src/msav_alloc.c
     msav/src/msav_zlib.c

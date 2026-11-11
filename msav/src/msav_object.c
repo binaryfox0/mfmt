@@ -194,8 +194,8 @@ void msav__obj_destroy(msav__obj_t *obj)
             break;
 
         case MSAV__OBJ_OBJECT_ARRAY:
-            for(size_t i = 0; i < obj->ga.count; i++)
-                msav__obj_destroy(&msav__arr_at(&obj->ga, msav__obj_t, i));
+            for(size_t i = 0; i < obj->oa.count; i++)
+                msav__obj_destroy(&msav__arr_at(&obj->oa, msav__obj_t, i));
             /* fall-through */
 
         case MSAV__OBJ_INTSEQ:
