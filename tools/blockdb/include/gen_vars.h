@@ -14,6 +14,8 @@ typedef enum
 typedef struct bdb__gen_var_desc
 {
     const char *name;
+    const char *enum_prefix;
+    const char *enum_name;
     bdb__gen_var_kind_t kind;
     int offset;
     int size;
@@ -38,6 +40,8 @@ static inline bdb__gen_var_desc_t bdb__gen_var_bit(
 
 static inline bdb__gen_var_desc_t bdb__gen_var_bits(
         const char *out_name, /* the generated output name */
+    const char *enum_prefix,
+    const char *enum_name,
         const int offset,
         const int size,
         const bdb__arr_view_t bits_desc)
@@ -45,6 +49,8 @@ static inline bdb__gen_var_desc_t bdb__gen_var_bits(
     return 
         (bdb__gen_var_desc_t){ 
             .name = out_name, .kind = BDB__GEN_VAR_BITS,
+            .enum_prefix = enum_prefix,
+            .enum_name = enum_name,
             .offset = offset, .size = size, 
             .children = bits_desc
         };

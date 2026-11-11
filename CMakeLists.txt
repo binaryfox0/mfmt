@@ -55,6 +55,7 @@ target_add_asan(msav)
 add_library(aatls
     aatls/src/aatls.c
     aatls/src/aatls_arr.c
+    aatls/src/aatls_alloc.c
 )
 target_include_directories(aatls PUBLIC 
     aatls/include

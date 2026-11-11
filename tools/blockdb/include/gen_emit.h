@@ -17,6 +17,7 @@ typedef struct
 typedef struct
 {
     const char *prefix;
+    const char *internal_prefix;
     const char *type_name;
     char sep;
     size_t name_offset; /* offsetof(struct, name) */

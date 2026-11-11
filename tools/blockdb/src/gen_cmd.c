@@ -257,6 +257,7 @@ void bdb_gen_main(void *args)
     static const bdb_gen_name_fmt_t fmt = 
     {
         .prefix = "msav_block",
+        .internal_prefix = "msav__block",
         .type_name = "msav_block_t",
         .sep = '_',
         .name_offset = offsetof(bdb__gen_tn_t, name)
@@ -277,6 +278,8 @@ void bdb_gen_main(void *args)
     {
         bdb__gen_var_bits(
                 "has_building", 
+            "msav_block",
+                "has_building",
                 offsetof(bdb__gen_tn_t, has_building), 
                 MEMBER_SIZE(bdb__gen_tn_t, has_building),
                 (bdb__arr_view_t){
@@ -287,6 +290,8 @@ void bdb_gen_main(void *args)
         ),
         bdb__gen_var_bits(
                 "modules_bitmask", 
+            "msav",
+                "module_bitmask",
                 offsetof(bdb__gen_tn_t, modules_bitmask), 
                 MEMBER_SIZE(bdb__gen_tn_t, modules_bitmask),
                 (bdb__arr_view_t){

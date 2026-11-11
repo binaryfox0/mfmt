@@ -7,8 +7,8 @@ typedef struct
 {
     uint8_t has_building;
     uint8_t modules_bitmask;
-} msav_block__data_t;
+} msav__block_data_t;
 
-extern msav_block__data_t msav_block__db[__MSAV_BLOCK_MAX__];
+extern msav__block_data_t msav__block_db[MSAV_BLOCK_MAX];
 
 #endif

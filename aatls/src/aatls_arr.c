@@ -1,9 +1,8 @@
 #include "aatls_arr.h"
 
-#include <stdlib.h>
 #include <string.h>
 
-#include "mfmtio_alloc.h"
+#include "aatls_alloc_priv.h"
 
 #define AATLS__MIN(a, b) ((a) < (b) ? (a) : (b))
 
@@ -22,7 +21,7 @@ int aatls__arr_ensure(
     while(new_cap <= idx)
         new_cap *= 2;
 
-    new_ptr = realloc(*arr->ptr, new_cap * arr->stride);
+    new_ptr = aatls__realloc(*arr->ptr, new_cap * arr->stride);
     if(!new_ptr)
         return -1;
 

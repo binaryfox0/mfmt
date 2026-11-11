@@ -1,10 +1,11 @@
 #include "aatls.h"
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 #include "aatls_arr.h"
+#include "aatls_alloc_priv.h"
 #include <mfmtio.h>
 
 #include "mfmtio_alloc.h"
@@ -54,7 +55,7 @@ aatls_err_t aatls_parse(
     file_size = ftell(file);
     fseek(file, 0, SEEK_SET);
 
-    file_data = malloc(file_size);
+    file_data = aatls__malloc((size_t)file_size);
     if(!file_data)
     {
         fclose(file);
@@ -64,7 +65,7 @@ aatls_err_t aatls_parse(
     fclose(file);
 
     rc = aatls_parse_from_memory(file_data, (uint32_t)file_size, out);
-    free(file_data);
+    aatls__free(file_data);
 
     return rc;
 }
@@ -116,8 +117,16 @@ aatls_err_t aatls_parse_from_memory(
         if(stream.eos)
             break;
         
-        pg.name = mfmtio_read_utf(&stream);
+        char *mfmtio_name = mfmtio_read_utf(&stream);
         if(stream.oom)
+        {
+            mfmtio_free(mfmtio_name);
+            rc = AATLS_ERR_NO_MEM;
+            break;
+        }
+        pg.name = aatls__strdup(mfmtio_name);
+        mfmtio_free(mfmtio_name);
+        if(!pg.name)
         {
             rc = AATLS_ERR_NO_MEM;
             break;
@@ -133,7 +142,7 @@ aatls_err_t aatls_parse_from_memory(
 
         if(stream.eos)
         {
-            free(pg.name);
+            aatls__free(pg.name);
             rc = AATLS_ERR_CORRUPT;
             break;
         }
@@ -146,11 +155,11 @@ aatls_err_t aatls_parse_from_memory(
         }
 
         pg.region_count = rg_cnt_tmp;
-        pg.regions = calloc(
+        pg.regions = aatls__calloc(
                 pg.region_count, sizeof(*pg.regions)); 
         if(!pg.regions)
         {
-            free(pg.name);
+            aatls__free(pg.name);
             rc = AATLS_ERR_NO_MEM;
             break;
         }
@@ -159,8 +168,16 @@ aatls_err_t aatls_parse_from_memory(
         for(int32_t i = 0; i < pg.region_count; i++)
         {
             aatls_region_t region = {0};
-            region.name = mfmtio_read_utf(&stream);
+            char *mfmtio_name = mfmtio_read_utf(&stream);
             if(stream.oom)
+            {
+                mfmtio_free(mfmtio_name);
+                rc = AATLS_ERR_NO_MEM;
+                break;
+            }
+            region.name = aatls__strdup(mfmtio_name);
+            mfmtio_free(mfmtio_name);
+            if(!region.name)
             {
                 rc = AATLS_ERR_NO_MEM;
                 break;
@@ -199,7 +216,7 @@ aatls_err_t aatls_parse_from_memory(
                     aatls__validate_region(&region) < 0)
             {
                 rc = AATLS_ERR_CORRUPT;
-                free(region.name);
+                aatls__free(region.name);
                 break;
             }
 
@@ -257,14 +274,14 @@ aatls_err_t aatls_write(
     file = fopen(file_name, "wb");
     if(!file)
     {
-        free(buf);
+        aatls__free(buf);
         return AATLS_ERR_IO;
     }
 
     fwrite(buf, 1, bufsiz, file);
 
     fclose(file);
-    free(buf);
+    aatls__free(buf);
     return AATLS_ERR_OK;
 }
 
@@ -362,15 +379,18 @@ aatls_err_t aatls_write_to_memory(
 
     if(rc != AATLS_ERR_OK)
     {
-        free(stream.buf);
+        mfmtio_free(stream.buf);
         return rc;
     }
 
-    // truncate
-    uint8_t *shrunk_buf = realloc(stream.buf, stream.size);
-    if(shrunk_buf)
-        stream.buf = shrunk_buf;
-    *out_buf = stream.buf;
+    *out_buf = aatls__malloc(stream.size);
+    if(!*out_buf)
+    {
+        mfmtio_free(stream.buf);
+        return AATLS_ERR_NO_MEM;
+    }
+    memcpy(*out_buf, stream.buf, stream.size);
+    mfmtio_free(stream.buf);
     *out_size = stream.size;
 
     return AATLS_ERR_OK;
@@ -459,7 +479,7 @@ aatls_err_t aatls__copy_region(
 
     tmp.flip = src->flip ? 1 : 0;
 
-    tmp.name = strdup(src->name);
+    tmp.name = aatls__strdup(src->name);
     if(!tmp.name)
         return AATLS_ERR_NO_MEM;
 
@@ -531,7 +551,7 @@ aatls_err_t aatls__copy_page(
 {
     aatls_page_t tmp = {0};
  
-    tmp.name = strdup(src->name);
+    tmp.name = aatls__strdup(src->name);
     if(!tmp.name)
         return AATLS_ERR_NO_MEM;
 
@@ -544,10 +564,10 @@ aatls_err_t aatls__copy_page(
 
     if(src->region_count > 0)
     {
-        tmp.regions = malloc(sizeof(*tmp.regions) * src->region_count);
+        tmp.regions = aatls__malloc(sizeof(*tmp.regions) * src->region_count);
         if(!tmp.regions)
         {
-            free(tmp.name);
+            aatls__free(tmp.name);
             return AATLS_ERR_NO_MEM;
         }
         for(int32_t i = 0; i < src->region_count; i++)
@@ -560,7 +580,7 @@ aatls_err_t aatls__copy_page(
             {
                 for(; i >= 0; i--)
                     aatls_destroy_region(&tmp.regions[i]);
-                free(tmp.name);
+                aatls__free(tmp.name);
                 return err;
             }
         }
@@ -630,7 +650,7 @@ aatls_err_t aatls_copy_atlas(
 
     if(src->page_count > 0)
     {
-        tmp.pages = malloc(sizeof(*tmp.pages) * src->page_count);
+        tmp.pages = aatls__malloc(sizeof(*tmp.pages) * src->page_count);
         if(!tmp.pages)
             return AATLS_ERR_NO_MEM;
         for(int32_t i = 0; i < src->page_count; i++)
@@ -809,7 +829,7 @@ void aatls_destroy_region(
         return;
 
     if(region->name)
-        free(region->name);
+        aatls__free(region->name);
     *region = (aatls_region_t){0};
 }
 
@@ -821,7 +841,7 @@ void aatls_destroy_page(
         return;
 
     if(page->name)
-        free(page->name);
+        aatls__free(page->name);
     if(
         page->region_count > 0 && 
         page->region_capacity >= page->region_count && 
@@ -829,7 +849,7 @@ void aatls_destroy_page(
     ) {
         for(int32_t i = 0; i < page->region_count; i++)
             aatls_destroy_region(&page->regions[i]);
-        free(page->regions);
+        aatls__free(page->regions);
     }
     *page = (aatls_page_t){0};
 }
@@ -848,7 +868,7 @@ void aatls_destroy_atlas(
     ) {
         for(int32_t i = 0; i < atlas->page_count; i++)
             aatls_destroy_page(&atlas->pages[i]);
-        free(atlas->pages);
+        aatls__free(atlas->pages);
     }
     *atlas = (aatls_atlas_t){0};
 }

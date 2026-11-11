@@ -2,6 +2,7 @@
 #define AATLS_H
 
 #include <stdint.h>
+#include <aatls_alloc.h>
 
 /**
  * @file aatls.h
@@ -28,6 +29,9 @@
  * - Insert functions use MOVE semantics (no deep copy).
  * - Copy functions perform deep copies.
  * - destroy_*() frees internal allocations but NOT the struct itself.
+ * - Owned allocations use the allocator configured with aatls_alloc_set().
+ *   Configure it before using aatls and keep it unchanged until all owned
+ *   allocations are released. Names transferred into aatls must use it too.
  *
  * ---------------------------------------------------------------------------
  * Thread Safety
@@ -281,7 +285,8 @@ aatls_err_t aatls_write(
  * @param[out] out_buf Receives allocated buffer (caller owns).
  * @param[out] out_size Receives buffer size in bytes.
  *
- * Caller must free(*out_buf) when no longer needed.
+ * Caller must release *out_buf with the configured allocator's free callback
+ * and userdata when no longer needed.
  *
  * @return
  *   - AATLS_ERR_OK on success

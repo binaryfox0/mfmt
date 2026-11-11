@@ -3,6 +3,21 @@
 
 typedef enum
 {
+    MSAV_BLOCK_HAS_BUILDING_NONE = 0,
+    MSAV_BLOCK_HAS_BUILDING_UPDATE = 1u << 0,
+    MSAV_BLOCK_HAS_BUILDING_DESTRUCTIBLE = 1u << 1,
+} msav_block_has_building_t;
+
+typedef enum
+{
+    MSAV_MODULE_BITMASK_NONE = 0,
+    MSAV_MODULE_BITMASK_HAS_ITEMS = 1u << 0,
+    MSAV_MODULE_BITMASK_HAS_POWER = 1u << 1,
+    MSAV_MODULE_BITMASK_HAS_LIQUIDS = 1u << 2,
+} msav_module_bitmask_t;
+
+typedef enum
+{
     MSAV_BLOCK_AIR,
     MSAV_BLOCK_SPAWN,
     MSAV_BLOCK_REMOVE_WALL,
@@ -430,7 +445,7 @@ typedef enum
     MSAV_BLOCK_ADVANCED_LAUNCH_PAD,
     MSAV_BLOCK_LANDING_PAD,
     MSAV_BLOCK_INTERPLANETARY_ACCELERATOR,
-    __MSAV_BLOCK_MAX__
+    MSAV_BLOCK_MAX
 } msav_block_t;
 
 const char *msav_block_name(msav_block_t id);

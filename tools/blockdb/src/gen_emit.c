@@ -123,9 +123,88 @@ static void bdb__fprint_prefixed_upper(
         fputc(toupper((unsigned char)*p), file);
     }
 }
+
+static void bdb__fprint_bit_name(
+        FILE *file,
+        const bdb_gen_name_fmt_t *fmt,
+        const bdb__gen_var_desc_t *vd,
+        const bdb__gen_var_desc_t *bit)
+{
+    const char *prefix = vd->enum_prefix ? vd->enum_prefix : fmt->prefix;
+    const char *enum_name = vd->enum_name ? vd->enum_name : vd->name;
+    char *name = bdb__sprintf("%s_%s", enum_name, bit->name);
+    if(!name)
+        return;
+
+    bdb_gen_name_fmt_t enum_fmt = *fmt;
+    enum_fmt.prefix = prefix;
+    bdb__fprint_prefixed_upper(file, &enum_fmt, name);
+    free(name);
+}
+
+static int bdb__gen_emit_bitmask(
+        FILE *f,
+        const uint8_t *base,
+        const bdb__gen_var_desc_t *vd,
+        const bdb_gen_name_fmt_t *fmt)
+{
+    uint8_t known_mask[sizeof(uint64_t)] = {0};
+    int has_term = 0;
+
+    if(vd->size > (int)sizeof(known_mask))
+        return -1;
+
+    for(size_t i = 0; i < vd->children.count; i++)
+    {
+        const bdb__gen_var_desc_t *bit =
+            &bdb__arr_get(&vd->children, bdb__gen_var_desc_t, i);
+        size_t byte_idx = (size_t)bit->offset / 8;
+        uint8_t mask = (uint8_t)(1u << (bit->offset % 8));
+
+        known_mask[byte_idx] |= mask;
+        if(!(base[vd->offset + byte_idx] & mask))
+            continue;
+
+        if(has_term)
+            fputs(" | ", f);
+        bdb__fprint_bit_name(f, fmt, vd, bit);
+        has_term = 1;
+    }
+
+    int has_unknown_bits = 0;
+    for(int i = 0; i < vd->size; i++)
+    {
+        uint8_t value = base[vd->offset + i] & (uint8_t)~known_mask[i];
+        if(value)
+            has_unknown_bits = 1;
+    }
+
+    if(has_unknown_bits)
+    {
+        if(has_term)
+            fputs(" | ", f);
+        fputs("0x", f);
+        for(int i = vd->size - 1; i >= 0; i--)
+        {
+            uint8_t value = base[vd->offset + i] & (uint8_t)~known_mask[i];
+            fprintf(f, "%02X", value);
+        }
+        has_term = 1;
+    }
+
+    if(!has_term)
+    {
+        bdb__fprint_bit_name(f, fmt, vd,
+                &(bdb__gen_var_desc_t){ .name = "none" });
+    }
+
+    return 0;
+}
+
 static int bdb__gen_emit_header(
         const bdb_gen_path_config_t *pc,
         const bdb__arr_t *arr,
+        const bdb__arr_view_t *vds,
         const bdb_gen_name_fmt_t *fmt)
 {
     int ret = -1;
@@ -147,6 +226,33 @@ static int bdb__gen_emit_header(
 
     bdb__emit_include_guard_begin(f, file_name, fmt->sep);
 
+    for(size_t i = 0; i < vds->count; i++)
+    {
+        bdb__gen_var_desc_t vd =
+            bdb__arr_get(vds, bdb__gen_var_desc_t, i);
+        if(vd.kind != BDB__GEN_VAR_BITS)
+            continue;
+
+        fputs("\ntypedef enum\n{\n", f);
+        fprintf(f, "%*s", BDB__INDENT, "");
+        bdb__fprint_bit_name(f, fmt, &vd,
+                &(bdb__gen_var_desc_t){ .name = "none" });
+        fputs(" = 0,\n", f);
+
+        for(size_t j = 0; j < vd.children.count; j++)
+        {
+            const bdb__gen_var_desc_t *bit =
+                &bdb__arr_get(&vd.children, bdb__gen_var_desc_t, j);
+            fprintf(f, "%*s", BDB__INDENT, "");
+            bdb__fprint_bit_name(f, fmt, &vd, bit);
+            fprintf(f, " = 1u << %d,\n", bit->offset);
+        }
+
+        fprintf(f, "} %s_%s_t;\n",
+            vd.enum_prefix ? vd.enum_prefix : fmt->prefix,
+            vd.enum_name ? vd.enum_name : vd.name);
+    }
+
     bdb__info("generating blocks enum");
     fputs("\ntypedef enum\n{\n", f);
     for(size_t i = 0; i < arr->count; i++)
@@ -162,9 +268,9 @@ static int bdb__gen_emit_header(
         bdb__fprint_prefixed_upper(f, fmt, name);
         fputs(",\n", f);
     }
-    fprintf(f, "%*s__", BDB__INDENT, "");
+    fprintf(f, "%*s", BDB__INDENT, "");
     bdb__fprint_prefixed_upper(f, fmt, "max");
-    fputs("__\n", f);
+    fputc('\n', f);
 
     fprintf(f, "} %s_t;\n", fmt->prefix);
     fprintf(f, "\nconst char *%s_name(%s id);\n", fmt->prefix, fmt->type_name);
@@ -241,13 +347,13 @@ static int bdb__gen_emit_private_header(
                 BDB__INDENT, "", type, vd.name);
     }
 
-    fprintf(f, "} %s__data_t;\n\n", fmt->prefix);
+        fprintf(f, "} %s_data_t;\n\n", fmt->internal_prefix);
 
-    fprintf(f, "extern %s__data_t %s__db[__",
-            fmt->prefix, fmt->prefix);
+    fprintf(f, "extern %s_data_t %s_db[",
+            fmt->internal_prefix, fmt->internal_prefix);
 
     bdb__fprint_prefixed_upper(f, fmt, "max");
-    fputs("__];\n", f);
+    fputs("];\n", f);
 
     bdb__emit_include_guard_end(f);
 
@@ -283,13 +389,13 @@ static int bdb__gen_emit_source_file(
         pc->stem,
         pc->header_ext ? pc->header_ext : "");
 
-    fprintf(f, "%s__data_t %s__db[__",
-            fmt->prefix, fmt->prefix);
+    fprintf(f, "%s_data_t %s_db[",
+            fmt->internal_prefix, fmt->internal_prefix);
 
     bdb__info("generating block database");
 
     bdb__fprint_prefixed_upper(f, fmt, "max");
-    fputs("__] =\n{\n", f);
+    fputs("] =\n{\n", f);
     for(size_t i = 0; i < arr->count; i++)
     {
         const uint8_t *base = bdb__arr_get_base(arr, i);
@@ -312,17 +418,25 @@ static int bdb__gen_emit_source_file(
             if(vd.kind != BDB__GEN_VAR_BITS)
                 continue;
 
-            fprintf(f, "%*s.%s = 0x",
-                    BDB__INDENT * 2, "", vd.name);
-
-            for(int k = 0; k < vd.size; k++)
+            fprintf(f, "%*s.%s = ", BDB__INDENT * 2, "", vd.name);
+            if(bdb__gen_emit_bitmask(f, base, &vd, fmt) < 0)
             {
-                uint8_t byte =
-                    base[vd.offset + (vd.size - 1 - k)];
-                fprintf(f, "%02X", byte);
+                fclose(f);
+                return -1;
             }
 
-            if(j + 1 < vds->count)
+            int has_later_var = 0;
+            for(size_t k = j + 1; k < vds->count; k++)
+            {
+                bdb__gen_var_desc_t next =
+                    bdb__arr_get(vds, bdb__gen_var_desc_t, k);
+                if(next.kind == BDB__GEN_VAR_BITS)
+                {
+                    has_later_var = 1;
+                    break;
+                }
+            }
+            if(has_later_var)
                 fputc(',', f);
 
             fputc('\n', f);
@@ -337,9 +451,9 @@ static int bdb__gen_emit_source_file(
     }
     fputs("};\n", f);
 
-    fprintf(f, "\nstatic const char *const %s__names[__", fmt->prefix);
+    fprintf(f, "\nstatic const char *const %s_names[", fmt->internal_prefix);
     bdb__fprint_prefixed_upper(f, fmt, "max");
-    fputs("__] =\n{\n", f);
+    fputs("] =\n{\n", f);
     for(size_t i = 0; i < arr->count; i++)
     {
         const uint8_t *base = bdb__arr_get_base(arr, i);
@@ -356,15 +470,15 @@ static int bdb__gen_emit_source_file(
     fprintf(f,
         "const char *%s_name(%s id)\n"
         "{\n"
-        "%*sif ((unsigned int)id >= (unsigned int)__",
+        "%*sif ((unsigned int)id >= (unsigned int)",
         fmt->prefix, fmt->type_name, BDB__INDENT, "");
     bdb__fprint_prefixed_upper(f, fmt, "max");
     fprintf(f,
-        "__)\n"
+        ")\n"
         "%*sreturn 0;\n"
-        "%*sreturn %s__names[id];\n"
+        "%*sreturn %s_names[id];\n"
         "}\n",
-        BDB__INDENT * 2, "", BDB__INDENT, "", fmt->prefix);
+        BDB__INDENT * 2, "", BDB__INDENT, "", fmt->internal_prefix);
     bdb_ui_progress_end();
 
     fclose(f);
@@ -425,7 +539,7 @@ int bdb_gen_emit_code(
     if(!pc || !pc->stem || !arr || !vds || !fmt)
         return -1;
 
-    if(bdb__gen_emit_header(pc, arr, fmt) < 0)
+    if(bdb__gen_emit_header(pc, arr, vds, fmt) < 0)
     {
         bdb__error("failed to generate header file");
         return -1;

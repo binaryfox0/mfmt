@@ -201,7 +201,10 @@ static msav_err_t msav__read_chunk_common(
         MSAV__INFO("chunk '%s' begin: format=%s offset=0x%08X length=%u",
                 name, format, payload_start - prefix_size, length);
 
+    uint32_t stream_end = stream->bufsz;
+    stream->bufsz = payload_end;
     rc = payload_read_fn(stream, reader);
+    stream->bufsz = stream_end;
     if(rc != MSAV_ERR_OK)
     {
         MSAV__ERROR("chunk '%s' failed at offset 0x%08X (error=%d)",
@@ -546,28 +549,353 @@ cleanup:
     return rc;
 }
 
+static msav_err_t msav__skip_bytes(mfmtio_rstream_t *stream, uint64_t count)
+{
+    if(count > UINT32_MAX || !msav__has_bytes(stream, (uint32_t)count))
+        return MSAV_ERR_CORRUPT;
+    stream->idx += (uint32_t)count;
+    return MSAV_ERR_OK;
+}
+
 msav_err_t msav__read_patches(
-        mfmtio_rstream_t *stream, 
+        mfmtio_rstream_t *stream,
         msav__file_reader_t *reader)
 {
-    uint8_t amount = mfmtio_read_i8(stream);
-    MSAV__INFO("patches: amount=%u", amount);
-    for(int i = 0; i < amount; i++)
+    int32_t format_version = 0;
+    int32_t total = 0;
+
+    (void)reader;
+
+    if(!msav__has_bytes(stream, 8))
+        return MSAV_ERR_CORRUPT;
+
+    format_version = mfmtio_read_i32(stream);
+    total = mfmtio_read_i32(stream);
+    if(stream->eos || format_version < 0 || total < 0 ||
+       (uint32_t)total > stream->bufsz - stream->idx)
     {
-        int32_t len = 0;
-        int8_t *bytes = 0;
-
-        len = mfmtio_read_i32(stream);
-        bytes = msav__malloc((len + 1) * sizeof(int8_t));
-        if(!bytes)
-            break;
-
-        mfmtio_read_fully(stream, bytes, len);
-        bytes[len] = '\0';
-        MSAV__DEBUG("patches: name=\"%s\"", bytes);
-        msav__free(bytes);
+        MSAV__ERROR("patches: invalid header format=%d assets=%d",
+                format_version, total);
+        return MSAV_ERR_CORRUPT;
     }
-    MSAV__INFO("patches decoded: amount=%u", amount);
+
+    MSAV__INFO("patches: format=%d assets=%d", format_version, total);
+    for(int32_t i = 0; i < total; i++)
+    {
+        uint8_t type = 0;
+        char *path = NULL;
+        int embedded = 0;
+        int32_t length = 0;
+        msav_err_t rc = MSAV_ERR_OK;
+
+        if(!msav__has_bytes(stream, 3))
+            return MSAV_ERR_CORRUPT;
+
+        type = mfmtio_read_u8(stream);
+        path = mfmtio_read_utf(stream);
+        embedded = mfmtio_read_bool(stream);
+        if(stream->eos || !path)
+        {
+            mfmtio_free(path);
+            MSAV__ERROR("patches: malformed asset record %d", i);
+            return stream->oom ? MSAV_ERR_NO_MEM : MSAV_ERR_CORRUPT;
+        }
+        if(type >= 6)
+        {
+            MSAV__ERROR("patches: invalid asset type %u for '%s'", type, path);
+            mfmtio_free(path);
+            return MSAV_ERR_CORRUPT;
+        }
+
+        if(embedded)
+        {
+            if(type == 1)
+            {
+                if(!msav__has_bytes(stream, 2))
+                {
+                    mfmtio_free(path);
+                    return MSAV_ERR_CORRUPT;
+                }
+                (void)mfmtio_read_i16(stream);
+            }
+
+            if(!msav__has_bytes(stream, 4))
+            {
+                mfmtio_free(path);
+                return MSAV_ERR_CORRUPT;
+            }
+            length = mfmtio_read_i32(stream);
+            if(stream->eos || length < 0)
+            {
+                MSAV__ERROR("patches: invalid embedded length for '%s'", path);
+                mfmtio_free(path);
+                return MSAV_ERR_CORRUPT;
+            }
+            rc = msav__skip_bytes(stream, (uint32_t)length);
+            if(rc != MSAV_ERR_OK)
+            {
+                MSAV__ERROR("patches: truncated embedded asset '%s'", path);
+                mfmtio_free(path);
+                return rc;
+            }
+        }
+        else
+        {
+            rc = msav__skip_bytes(stream, 32);
+            if(rc != MSAV_ERR_OK)
+            {
+                MSAV__ERROR("patches: truncated hash for '%s'", path);
+                mfmtio_free(path);
+                return rc;
+            }
+        }
+
+        MSAV__DEBUG("patch asset: type=%u path=\"%s\" embedded=%s",
+                type, path, embedded ? "true" : "false");
+        mfmtio_free(path);
+    }
+
+    MSAV__INFO("patches decoded: assets=%d", total);
+    return stream->eos ? MSAV_ERR_CORRUPT : MSAV_ERR_OK;
+}
+
+static msav_err_t msav__ubjson_read_integer(
+        mfmtio_rstream_t *stream,
+        int type,
+        uint64_t *value)
+{
+    uint64_t result = 0;
+    uint32_t size = 0;
+
+    switch(type)
+    {
+        case 'i':
+            if(!msav__has_bytes(stream, 1)) return MSAV_ERR_CORRUPT;
+            {
+                int8_t signed_value = mfmtio_read_i8(stream);
+                if(signed_value < 0) return MSAV_ERR_CORRUPT;
+                *value = (uint8_t)signed_value;
+            }
+            return MSAV_ERR_OK;
+        case 'U':
+            if(!msav__has_bytes(stream, 1)) return MSAV_ERR_CORRUPT;
+            *value = mfmtio_read_u8(stream);
+            return MSAV_ERR_OK;
+        case 'I':
+            if(!msav__has_bytes(stream, 2)) return MSAV_ERR_CORRUPT;
+            {
+                int16_t signed_value = mfmtio_read_i16(stream);
+                if(signed_value < 0) return MSAV_ERR_CORRUPT;
+                *value = (uint16_t)signed_value;
+            }
+            return MSAV_ERR_OK;
+        case 'l':
+            if(!msav__has_bytes(stream, 4)) return MSAV_ERR_CORRUPT;
+            {
+                int32_t signed_value = mfmtio_read_i32(stream);
+                if(signed_value < 0) return MSAV_ERR_CORRUPT;
+                *value = (uint32_t)signed_value;
+            }
+            return MSAV_ERR_OK;
+        case 'L':
+            size = 8;
+            break;
+        default:
+            return MSAV_ERR_CORRUPT;
+    }
+
+    if(!msav__has_bytes(stream, size))
+        return MSAV_ERR_CORRUPT;
+    for(uint32_t i = 0; i < size; i++)
+        result = (result << 8) | mfmtio_read_u8(stream);
+    if(result > INT64_MAX)
+        return MSAV_ERR_CORRUPT;
+    *value = result;
+    return MSAV_ERR_OK;
+}
+
+static msav_err_t msav__ubjson_read_string(
+        mfmtio_rstream_t *stream,
+        uint64_t *length)
+{
+    int type = 0;
+    if(!msav__has_bytes(stream, 1))
+        return MSAV_ERR_CORRUPT;
+    type = mfmtio_read_u8(stream);
+    if(msav__ubjson_read_integer(stream, type, length) != MSAV_ERR_OK)
+        return MSAV_ERR_CORRUPT;
+    return msav__skip_bytes(stream, *length);
+}
+
+static msav_err_t msav__ubjson_skip_value(
+        mfmtio_rstream_t *stream,
+        int type,
+        uint32_t depth,
+        uint64_t *root_entries);
+
+static msav_err_t msav__ubjson_skip_container(
+        mfmtio_rstream_t *stream,
+        int object,
+        uint32_t depth,
+        uint64_t *root_entries)
+{
+    int forced_type = 0;
+    int has_forced_type = 0;
+    int has_count = 0;
+    uint64_t count = 0;
+    uint64_t entries = 0;
+
+    if(depth >= 128)
+        return MSAV_ERR_CORRUPT;
+
+    while(msav__has_bytes(stream, 1))
+    {
+        int metadata = stream->buf[stream->idx];
+        if(metadata != '$' && metadata != '#')
+            break;
+        stream->idx++;
+
+        if(metadata == '$')
+        {
+            if(has_forced_type || !msav__has_bytes(stream, 1))
+                return MSAV_ERR_CORRUPT;
+            forced_type = mfmtio_read_u8(stream);
+            has_forced_type = 1;
+        }
+        else
+        {
+            int length_type = 0;
+            if(has_count || !msav__has_bytes(stream, 1))
+                return MSAV_ERR_CORRUPT;
+            length_type = mfmtio_read_u8(stream);
+            if(msav__ubjson_read_integer(stream, length_type, &count) != MSAV_ERR_OK)
+                return MSAV_ERR_CORRUPT;
+            if(count > stream->bufsz)
+                return MSAV_ERR_CORRUPT;
+            has_count = 1;
+        }
+    }
+
+    while(has_count ? entries < count : msav__has_bytes(stream, 1))
+    {
+        int type = 0;
+        if(object)
+        {
+            uint64_t key_length = 0;
+            if(!has_count && stream->buf[stream->idx] == '}')
+            {
+                stream->idx++;
+                return MSAV_ERR_OK;
+            }
+            if(stream->buf[stream->idx] == 'N')
+            {
+                stream->idx++;
+                continue;
+            }
+            if(msav__ubjson_read_string(stream, &key_length) != MSAV_ERR_OK)
+                return MSAV_ERR_CORRUPT;
+            if(depth == 0) (*root_entries)++;
+        }
+        else if(!has_count && stream->buf[stream->idx] == ']')
+        {
+            stream->idx++;
+            return MSAV_ERR_OK;
+        }
+
+        if(has_forced_type)
+        {
+            type = forced_type;
+        }
+        else
+        {
+            if(!msav__has_bytes(stream, 1))
+                return MSAV_ERR_CORRUPT;
+            type = mfmtio_read_u8(stream);
+            if(type == 'N')
+            {
+                if(object && depth == 0) (*root_entries)--;
+                continue;
+            }
+        }
+
+        if(msav__ubjson_skip_value(stream, type, depth + 1, root_entries) != MSAV_ERR_OK)
+            return MSAV_ERR_CORRUPT;
+        entries++;
+    }
+
+    if(!has_count)
+        return MSAV_ERR_CORRUPT;
+    return MSAV_ERR_OK;
+}
+
+static msav_err_t msav__ubjson_skip_value(
+        mfmtio_rstream_t *stream,
+        int type,
+        uint32_t depth,
+        uint64_t *root_entries)
+{
+    uint32_t size = 0;
+    uint64_t string_length = 0;
+
+    switch(type)
+    {
+        case 'Z': case 'T': case 'F': case 'N':
+            return MSAV_ERR_OK;
+        case 'i': case 'U': case 'C':
+            size = 1;
+            break;
+        case 'I':
+            size = 2;
+            break;
+        case 'l': case 'd':
+            size = 4;
+            break;
+        case 'L': case 'D':
+            size = 8;
+            break;
+        case 'S': case 'H':
+            if(msav__ubjson_read_string(stream, &string_length) != MSAV_ERR_OK)
+                return MSAV_ERR_CORRUPT;
+            return MSAV_ERR_OK;
+        case '[':
+            return msav__ubjson_skip_container(stream, 0, depth, root_entries);
+        case '{':
+            return msav__ubjson_skip_container(stream, 1, depth, root_entries);
+        default:
+            return MSAV_ERR_CORRUPT;
+    }
+
+    return msav__skip_bytes(stream, size);
+}
+
+static msav_err_t msav__read_markers(
+        mfmtio_rstream_t *stream,
+        msav__file_reader_t *reader)
+{
+    int type = 0;
+    uint64_t marker_count = 0;
+    msav_err_t rc = MSAV_ERR_OK;
+
+    (void)reader;
+
+    if(!msav__has_bytes(stream, 1))
+        return MSAV_ERR_CORRUPT;
+    type = mfmtio_read_u8(stream);
+    if(type != '{')
+    {
+        MSAV__ERROR("markers: expected UBJSON object, found 0x%02X", type);
+        return MSAV_ERR_CORRUPT;
+    }
+
+    rc = msav__ubjson_skip_value(stream, type, 0, &marker_count);
+    if(rc != MSAV_ERR_OK)
+    {
+        MSAV__ERROR("markers: malformed UBJSON at offset 0x%08X", stream->idx);
+        return rc;
+    }
+
+    MSAV__INFO("markers decoded: count=%llu",
+            (unsigned long long)marker_count);
     return MSAV_ERR_OK;
 }
 
@@ -606,13 +934,6 @@ static msav_err_t msav__read_file(
     if(rc != MSAV_ERR_OK)
         return rc;
 
-    rc = reader->chunk_read(
-            stream, reader, 
-            "content mapping", 
-            msav__read_content);
-    if(rc != MSAV_ERR_OK)
-        return rc;
-
     if(reader->version >= 12)
     {
         rc = reader->chunk_read(
@@ -622,6 +943,13 @@ static msav_err_t msav__read_file(
         if(rc != MSAV_ERR_OK)
             return rc;
     }
+
+    rc = reader->chunk_read(
+            stream, reader,
+            "content mapping",
+            msav__read_content);
+    if(rc != MSAV_ERR_OK)
+        return rc;
 
     rc = reader->chunk_read(
             stream, reader, 
@@ -636,7 +964,10 @@ static msav_err_t msav__read_file(
 
     if(reader->version >= 8)
     {
-        rc = msav__skip_region(stream, "markers");
+        rc = reader->chunk_read(
+            stream, reader,
+            "markers",
+            msav__read_markers);
         if(rc != MSAV_ERR_OK)
             return rc;
     }
