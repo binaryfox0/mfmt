@@ -1,4 +1,4 @@
-#include "print_tree.h"
+#include "bdb_print_tree.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,7 +67,7 @@ static void bdb__print_ast(
 }
 
 extern const TSLanguage *tree_sitter_java(void);
-void print_tree_command(void *args)
+void bdb_print_tree_command(void *args)
 {
     const char *path = *(const char**)args;
 

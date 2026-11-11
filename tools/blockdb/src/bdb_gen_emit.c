@@ -1,4 +1,4 @@
-#include "gen_emit.h"
+#include "bdb_gen_emit.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,8 +11,8 @@
 #include "bdb_fs.h"
 #include "bdb_ui.h"
 
-#include "gen_utils.h"
-#include "gen_vars.h"
+#include "bdb_gen_utils.h"
+#include "bdb_gen_vars.h"
 
 #define BDB__INDENT 4
 

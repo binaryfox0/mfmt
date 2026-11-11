@@ -50,14 +50,14 @@ if(EXISTS ${TS_JAVA_BINDING} AND IS_DIRECTORY ${TS_JAVA_BINDING})
         blockdb/src/bdb_fs.c
         blockdb/src/bdb_ui.c
         blockdb/src/bdb_arr.c
-        blockdb/src/print_tree.c
-        blockdb/src/gen_utils.c
-        blockdb/src/gen_vars.c
-        blockdb/src/gen_tree.c
-        blockdb/src/gen_assign.c
-        blockdb/src/gen_blocks.c
-        blockdb/src/gen_emit.c
-        blockdb/src/gen_cmd.c
+        blockdb/src/bdb_print_tree.c
+        blockdb/src/bdb_gen_utils.c
+        blockdb/src/bdb_gen_vars.c
+        blockdb/src/bdb_gen_tree.c
+        blockdb/src/bdb_gen_assign.c
+        blockdb/src/bdb_gen_blocks.c
+        blockdb/src/bdb_gen_emit.c
+        blockdb/src/bdb_gen_cmd.c
     )
     target_include_directories(blockdb PRIVATE 
         ${TS_INCLUDE_DIRS}

@@ -1,4 +1,4 @@
-#include "gen_cmd.h"
+#include "bdb_gen_cmd.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,12 +14,12 @@
 #include "bdb_ui.h"
 #include "bdb_arr.h"
 
-#include "gen_utils.h"
-#include "gen_vars.h"
-#include "gen_tree.h"
-#include "gen_assign.h"
-#include "gen_blocks.h"
-#include "gen_emit.h"
+#include "bdb_gen_utils.h"
+#include "bdb_gen_vars.h"
+#include "bdb_gen_tree.h"
+#include "bdb_gen_assign.h"
+#include "bdb_gen_blocks.h"
+#include "bdb_gen_emit.h"
 
 #define ARRSZ(arr) (sizeof((arr)) / sizeof((arr)[0]))
 #define MEMBER_SIZE(t, a) (sizeof(((t*)0)->a))

@@ -1,6 +1,5 @@
 #include <mfmtio.h>
 
-#include <stdlib.h>
 #include <string.h>
 
 #include <mfmtio_alloc.h>
@@ -14,16 +13,16 @@ char* mfmtio_read_utf(mfmtio_rstream_t *stream)
     if(len <= 0)
         return 0;
 
-    if(stream->idx + (uint32_t)(len - 1) >= stream->bufsz
-            || stream->eos)
+    if(!mfmtio_has_bytes(stream, (uint32_t)len))
     {
-        stream->eos = 1;
+        if(stream->err == MFMTIO_ERR_OK)
+            stream->err = MFMTIO_ERR_EOF;
         return 0;
     }
     out = mfmtio_malloc(len + 1);
     if(!out)
     {
-        stream->oom = 1;
+        stream->err = MFMTIO_ERR_NO_MEM;
         return 0;
     }
     for(int16_t i = 0; i < len; i++)
@@ -40,7 +39,7 @@ int mfmtio_wensure(mfmtio_wstream_t *stream, const uint32_t extra)
     if(need <= stream->cap) 
         return 1;
 
-    if(stream->oom)
+    if(stream->err != MFMTIO_ERR_OK)
         return 0;
 
     uint32_t new_cap = stream->cap ? stream->cap : 64;
@@ -50,7 +49,7 @@ int mfmtio_wensure(mfmtio_wstream_t *stream, const uint32_t extra)
 
     uint8_t *nbuf = mfmtio_realloc(stream->buf, new_cap);
     if(!nbuf){
-        stream->oom = 1;
+        stream->err = MFMTIO_ERR_NO_MEM;
         return 0;
     }
 

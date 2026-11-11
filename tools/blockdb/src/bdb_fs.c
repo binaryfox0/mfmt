@@ -8,7 +8,7 @@
 
 #include "bdb_log.h"
 #include "bdb_utils.h"
-#include "gen_utils.h"
+#include "bdb_gen_utils.h"
 
 #ifdef _WIN32
 #   include <io.h>

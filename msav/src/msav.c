@@ -105,12 +105,6 @@ static const char *msav__ctype_strings[MSAV__CTYPE_COUNT] =
     [MSAV_CTYPE_UNIT_STANCE]    = "unitStance",
 };
 
-static int msav__has_bytes(const mfmtio_rstream_t *stream, uint32_t count)
-{
-    return stream && !stream->eos && stream->idx <= stream->bufsz &&
-           count <= stream->bufsz - stream->idx;
-}
-
 static msav_err_t msav__read_chunk_common(
         mfmtio_rstream_t *stream,
         msav__file_reader_t *reader,
@@ -171,7 +165,7 @@ static msav_err_t msav__read_chunk_common(
 
     if(!stream || !reader || !name || !payload_read_fn)
         return MSAV_ERR_PARAM;
-    if(!msav__has_bytes(stream, prefix_size))
+    if(!mfmtio_has_bytes(stream, prefix_size))
     {
         MSAV__ERROR("chunk '%s': missing %s length at offset 0x%08X",
                 name, format, stream->idx);
@@ -192,7 +186,7 @@ static msav_err_t msav__read_chunk_common(
         length = (uint32_t)signed_length;
     }
 
-    if(stream->eos || !msav__has_bytes(stream, length))
+    if(stream->err != MFMTIO_ERR_OK || !mfmtio_has_bytes(stream, length))
     {
         MSAV__ERROR("chunk '%s': length %u exceeds remaining input "
                 "at offset 0x%08X", name, length, stream->idx);
@@ -219,7 +213,7 @@ static msav_err_t msav__read_chunk_common(
                 name, stream->idx, rc);
         return rc;
     }
-    if(stream->eos)
+    if(stream->err != MFMTIO_ERR_OK)
     {
         MSAV__ERROR("chunk '%s' reached end of input at offset 0x%08X",
                 name, stream->idx);
@@ -344,12 +338,12 @@ static msav_err_t msav__read_map(
 
     (void)reader;
 
-    if(!msav__has_bytes(stream, 4))
+    if(!mfmtio_has_bytes(stream, 4))
         return MSAV_ERR_CORRUPT;
 
     width = (uint16_t)mfmtio_read_i16(stream);
     height = (uint16_t)mfmtio_read_i16(stream);
-    if(stream->eos || width == 0 || height == 0 ||
+    if(stream->err != MFMTIO_ERR_OK || width == 0 || height == 0 ||
        (uint32_t)width > UINT32_MAX / (uint32_t)height)
     {
         MSAV__ERROR("map: invalid dimensions %u x %u", width, height);
@@ -384,7 +378,7 @@ static msav_err_t msav__read_map(
         uint8_t run = 0;
         uint32_t run_length = 0;
 
-        if(!msav__has_bytes(stream, 5))
+        if(!mfmtio_has_bytes(stream, 5))
         {
             rc = MSAV_ERR_CORRUPT;
             goto malformed_map;
@@ -394,7 +388,7 @@ static msav_err_t msav__read_map(
         ore_id = mfmtio_read_i16(stream);
         run = mfmtio_read_u8(stream);
         run_length = (uint32_t)run + 1;
-        if(stream->eos || run_length > tile_count - i)
+        if(stream->err != MFMTIO_ERR_OK || run_length > tile_count - i)
         {
             rc = MSAV_ERR_CORRUPT;
             goto malformed_map;
@@ -415,7 +409,7 @@ static msav_err_t msav__read_map(
         int had_entity = 0;
         int had_data = 0;
 
-        if(!msav__has_bytes(stream, 3))
+        if(!mfmtio_has_bytes(stream, 3))
         {
             rc = MSAV_ERR_CORRUPT;
             goto malformed_map;
@@ -429,7 +423,7 @@ static msav_err_t msav__read_map(
 
         if(had_data)
         {
-            if(!msav__has_bytes(stream, 7))
+            if(!mfmtio_has_bytes(stream, 7))
             {
                 rc = MSAV_ERR_CORRUPT;
                 goto malformed_map;
@@ -443,13 +437,13 @@ static msav_err_t msav__read_map(
         if(had_entity)
         {
             int is_center = 0;
-            if(!msav__has_bytes(stream, 1))
+            if(!mfmtio_has_bytes(stream, 1))
             {
                 rc = MSAV_ERR_CORRUPT;
                 goto malformed_map;
             }
             is_center = mfmtio_read_bool(stream);
-            if(stream->eos)
+            if(stream->err != MFMTIO_ERR_OK)
             {
                 rc = MSAV_ERR_CORRUPT;
                 goto malformed_map;
@@ -471,14 +465,14 @@ static msav_err_t msav__read_map(
         {
             uint8_t run = 0;
             uint32_t run_length = 0;
-            if(!msav__has_bytes(stream, 1))
+            if(!mfmtio_has_bytes(stream, 1))
             {
                 rc = MSAV_ERR_CORRUPT;
                 goto malformed_map;
             }
             run = mfmtio_read_u8(stream);
             run_length = (uint32_t)run + 1;
-            if(stream->eos || run_length > tile_count - i)
+            if(stream->err != MFMTIO_ERR_OK || run_length > tile_count - i)
             {
                 rc = MSAV_ERR_CORRUPT;
                 goto malformed_map;
@@ -521,7 +515,7 @@ cleanup:
 
 static msav_err_t msav__skip_bytes(mfmtio_rstream_t *stream, uint64_t count)
 {
-    if(count > UINT32_MAX || !msav__has_bytes(stream, (uint32_t)count))
+    if(count > UINT32_MAX || !mfmtio_has_bytes(stream, (uint32_t)count))
         return MSAV_ERR_CORRUPT;
     stream->idx += (uint32_t)count;
     return MSAV_ERR_OK;
@@ -538,7 +532,7 @@ static msav_err_t msav__skip_typeio_object(
     (void)depth;
     (void)allow_arrays;
 
-    if(!msav__has_bytes(stream, 1))
+    if(!mfmtio_has_bytes(stream, 1))
         return MSAV_ERR_CORRUPT;
 
     rc = msav__obj_read(stream, &obj);
@@ -557,12 +551,12 @@ static msav_err_t msav__read_entity(
     int32_t id = 0;
     uint32_t remaining = 0;
 
-    if(!msav__has_bytes(stream, 5))
+    if(!mfmtio_has_bytes(stream, 5))
         return MSAV_ERR_CORRUPT;
 
     type = mfmtio_read_u8(stream);
     id = mfmtio_read_i32(stream);
-    if(stream->eos)
+    if(stream->err != MFMTIO_ERR_OK)
         return MSAV_ERR_CORRUPT;
 
     remaining = stream->bufsz - stream->idx;
@@ -581,10 +575,10 @@ static msav_err_t msav__read_entities(
     int32_t entity_count = 0;
     msav_err_t rc = MSAV_ERR_OK;
 
-    if(!msav__has_bytes(stream, 2))
+    if(!mfmtio_has_bytes(stream, 2))
         return MSAV_ERR_CORRUPT;
     mapping_count = mfmtio_read_i16(stream);
-    if(stream->eos || mapping_count < 0 ||
+    if(stream->err != MFMTIO_ERR_OK || mapping_count < 0 ||
        (uint32_t)mapping_count > (stream->bufsz - stream->idx) / 4)
         return MSAV_ERR_CORRUPT;
 
@@ -592,17 +586,17 @@ static msav_err_t msav__read_entities(
     {
         int16_t type = 0;
         char *name = NULL;
-        if(!msav__has_bytes(stream, 2))
+        if(!mfmtio_has_bytes(stream, 2))
         {
             rc = MSAV_ERR_CORRUPT;
             goto cleanup;
         }
         type = mfmtio_read_i16(stream);
         name = mfmtio_read_utf(stream);
-        if(stream->eos || type < 0 || !name)
+        if(stream->err != MFMTIO_ERR_OK || type < 0 || !name)
         {
             mfmtio_free(name);
-            rc = stream->oom ? MSAV_ERR_NO_MEM : MSAV_ERR_CORRUPT;
+            rc = stream->err == MFMTIO_ERR_NO_MEM ? MSAV_ERR_NO_MEM : MSAV_ERR_CORRUPT;
             goto cleanup;
         }
         if(type < (int16_t)MSAV__ARRSZ(reader->entity_names))
@@ -616,13 +610,13 @@ static msav_err_t msav__read_entities(
         }
     }
 
-    if(!msav__has_bytes(stream, 4))
+    if(!mfmtio_has_bytes(stream, 4))
     {
         rc = MSAV_ERR_CORRUPT;
         goto cleanup;
     }
     team_count = mfmtio_read_i32(stream);
-    if(stream->eos || team_count < 0 ||
+    if(stream->err != MFMTIO_ERR_OK || team_count < 0 ||
        (uint32_t)team_count > (stream->bufsz - stream->idx) / 8)
     {
         rc = MSAV_ERR_CORRUPT;
@@ -634,14 +628,14 @@ static msav_err_t msav__read_entities(
     {
         int32_t team_id = 0;
         int32_t plans = 0;
-        if(!msav__has_bytes(stream, 8))
+        if(!mfmtio_has_bytes(stream, 8))
         {
             rc = MSAV_ERR_CORRUPT;
             goto cleanup;
         }
         team_id = mfmtio_read_i32(stream);
         plans = mfmtio_read_i32(stream);
-        if(stream->eos || plans < 0 ||
+        if(stream->err != MFMTIO_ERR_OK || plans < 0 ||
            (uint32_t)plans > (stream->bufsz - stream->idx) / 9)
         {
             rc = MSAV_ERR_CORRUPT;
@@ -650,7 +644,7 @@ static msav_err_t msav__read_entities(
 
         for(int32_t j = 0; j < plans; j++)
         {
-            if(!msav__has_bytes(stream, 8))
+            if(!mfmtio_has_bytes(stream, 8))
             {
                 rc = MSAV_ERR_CORRUPT;
                 goto cleanup;
@@ -663,14 +657,14 @@ static msav_err_t msav__read_entities(
         MSAV__DEBUG("entity plans: team=%d count=%d", team_id, plans);
     }
 
-    if(!msav__has_bytes(stream, 4))
+    if(!mfmtio_has_bytes(stream, 4))
     {
         rc = MSAV_ERR_CORRUPT;
         goto cleanup;
     }
     entity_count = mfmtio_read_i32(stream);
      uint32_t minimum_record = (reader->version < 8 ? 2u : 4u) + 5u;
-     if(stream->eos || entity_count < 0 ||
+    if(stream->err != MFMTIO_ERR_OK || entity_count < 0 ||
          (uint32_t)entity_count > (stream->bufsz - stream->idx) / minimum_record)
     {
         rc = MSAV_ERR_CORRUPT;
@@ -705,7 +699,7 @@ static msav_err_t msav__read_tile_entity(
     uint8_t modules = 0;
     const char *block_name = NULL;
 
-    if(!msav__has_bytes(stream, 1))
+    if(!mfmtio_has_bytes(stream, 1))
         return MSAV_ERR_CORRUPT;
 
     revision = mfmtio_read_u8(stream);
@@ -736,12 +730,12 @@ msav_err_t msav__read_patches(
 
     (void)reader;
 
-    if(!msav__has_bytes(stream, 8))
+    if(!mfmtio_has_bytes(stream, 8))
         return MSAV_ERR_CORRUPT;
 
     format_version = mfmtio_read_i32(stream);
     total = mfmtio_read_i32(stream);
-    if(stream->eos || format_version < 0 || total < 0 ||
+    if(stream->err != MFMTIO_ERR_OK || format_version < 0 || total < 0 ||
        (uint32_t)total > stream->bufsz - stream->idx)
     {
         MSAV__ERROR("patches: invalid header format=%d assets=%d",
@@ -758,17 +752,17 @@ msav_err_t msav__read_patches(
         int32_t length = 0;
         msav_err_t rc = MSAV_ERR_OK;
 
-        if(!msav__has_bytes(stream, 3))
+        if(!mfmtio_has_bytes(stream, 3))
             return MSAV_ERR_CORRUPT;
 
         type = mfmtio_read_u8(stream);
         path = mfmtio_read_utf(stream);
         embedded = mfmtio_read_bool(stream);
-        if(stream->eos || !path)
+        if(stream->err != MFMTIO_ERR_OK || !path)
         {
             mfmtio_free(path);
             MSAV__ERROR("patches: malformed asset record %d", i);
-            return stream->oom ? MSAV_ERR_NO_MEM : MSAV_ERR_CORRUPT;
+            return stream->err == MFMTIO_ERR_NO_MEM ? MSAV_ERR_NO_MEM : MSAV_ERR_CORRUPT;
         }
         if(type >= 6)
         {
@@ -781,7 +775,7 @@ msav_err_t msav__read_patches(
         {
             if(type == 1)
             {
-                if(!msav__has_bytes(stream, 2))
+                if(!mfmtio_has_bytes(stream, 2))
                 {
                     mfmtio_free(path);
                     return MSAV_ERR_CORRUPT;
@@ -789,13 +783,13 @@ msav_err_t msav__read_patches(
                 (void)mfmtio_read_i16(stream);
             }
 
-            if(!msav__has_bytes(stream, 4))
+            if(!mfmtio_has_bytes(stream, 4))
             {
                 mfmtio_free(path);
                 return MSAV_ERR_CORRUPT;
             }
             length = mfmtio_read_i32(stream);
-            if(stream->eos || length < 0)
+            if(stream->err != MFMTIO_ERR_OK || length < 0)
             {
                 MSAV__ERROR("patches: invalid embedded length for '%s'", path);
                 mfmtio_free(path);
@@ -826,7 +820,7 @@ msav_err_t msav__read_patches(
     }
 
     MSAV__INFO("patches decoded: assets=%d", total);
-    return stream->eos ? MSAV_ERR_CORRUPT : MSAV_ERR_OK;
+    return stream->err != MFMTIO_ERR_OK ? MSAV_ERR_CORRUPT : MSAV_ERR_OK;
 }
 
 static msav_err_t msav__read_markers(
@@ -839,7 +833,7 @@ static msav_err_t msav__read_markers(
 
     (void)reader;
 
-    if(!msav__has_bytes(stream, 1))
+    if(!mfmtio_has_bytes(stream, 1))
         return MSAV_ERR_CORRUPT;
     type = mfmtio_read_u8(stream);
     if(type != '{')
@@ -866,10 +860,10 @@ static msav_err_t msav__read_custom(
 {
     int32_t amount = 0;
 
-    if(!msav__has_bytes(stream, 4))
+    if(!mfmtio_has_bytes(stream, 4))
         return MSAV_ERR_CORRUPT;
     amount = mfmtio_read_i32(stream);
-    if(stream->eos || amount < 0 ||
+    if(stream->err != MFMTIO_ERR_OK || amount < 0 ||
        (uint32_t)amount > (stream->bufsz - stream->idx) / 6)
         return MSAV_ERR_CORRUPT;
 
@@ -879,10 +873,10 @@ static msav_err_t msav__read_custom(
         char *name = NULL;
         msav_err_t rc = MSAV_ERR_OK;
         name = mfmtio_read_utf(stream);
-        if(stream->eos || !name)
+        if(stream->err != MFMTIO_ERR_OK || !name)
         {
             mfmtio_free(name);
-            return stream->oom ? MSAV_ERR_NO_MEM : MSAV_ERR_CORRUPT;
+            return stream->err == MFMTIO_ERR_NO_MEM ? MSAV_ERR_NO_MEM : MSAV_ERR_CORRUPT;
         }
 
         MSAV__DEBUG("custom: name=\"%s\"", name);
@@ -1011,7 +1005,7 @@ msav_err_t msav_parse_from_memory(
     stream.buf = use_decompressed ? decompressed_buf : buf;
     stream.bufsz = use_decompressed ? (uint32_t)decompressed_bufsz : bufsz;
 
-    if(!msav__has_bytes(&stream, (uint32_t)MSAV__ARRSZ(msav__header)))
+    if(!mfmtio_has_bytes(&stream, (uint32_t)MSAV__ARRSZ(msav__header)))
     {
         MSAV__ERROR("save header is truncated");
         rc = MSAV_ERR_FORMAT;
@@ -1027,7 +1021,7 @@ msav_err_t msav_parse_from_memory(
         }
     }
 
-    if(!msav__has_bytes(&stream, 4))
+    if(!mfmtio_has_bytes(&stream, 4))
     {
         MSAV__ERROR("save version is missing");
         rc = MSAV_ERR_FORMAT;
@@ -1037,7 +1031,7 @@ msav_err_t msav_parse_from_memory(
     reader.stream = &stream;
     reader.out = out;
     reader.version = mfmtio_read_i32(&stream);
-    if(stream.eos || reader.version <= 0)
+    if(stream.err != MFMTIO_ERR_OK || reader.version <= 0)
     {
         MSAV__ERROR("invalid save version %d", reader.version);
         rc = MSAV_ERR_FORMAT;

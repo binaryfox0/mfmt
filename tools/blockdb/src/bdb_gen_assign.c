@@ -1,9 +1,9 @@
-#include "gen_assign.h"
+#include "bdb_gen_assign.h"
 #include <string.h>
 
 #include "bdb_log.h"
-#include "gen_utils.h"
-#include "gen_vars.h"
+#include "bdb_gen_utils.h"
+#include "bdb_gen_vars.h"
 
 typedef int (*bdb__gen_handle_cb_t)(const bdb__gen_var_desc_t*, const char*, const size_t, void*);
 

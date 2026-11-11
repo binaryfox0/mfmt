@@ -2,15 +2,9 @@
 
 #include "msav_log_priv.h"
 
-static int msav__ubjson_has_bytes(const mfmtio_rstream_t *stream, uint32_t count)
-{
-    return stream && !stream->eos && stream->idx <= stream->bufsz &&
-           count <= stream->bufsz - stream->idx;
-}
-
 static msav_err_t msav__ubjson_skip_bytes(mfmtio_rstream_t *stream, uint64_t count)
 {
-    if(count > UINT32_MAX || !msav__ubjson_has_bytes(stream, (uint32_t)count))
+    if(count > UINT32_MAX || !mfmtio_has_bytes(stream, (uint32_t)count))
         return MSAV_ERR_CORRUPT;
     stream->idx += (uint32_t)count;
     return MSAV_ERR_OK;
@@ -27,7 +21,7 @@ static msav_err_t msav__ubjson_read_integer(
     switch(type)
     {
         case 'i':
-            if(!msav__ubjson_has_bytes(stream, 1)) return MSAV_ERR_CORRUPT;
+            if(!mfmtio_has_bytes(stream, 1)) return MSAV_ERR_CORRUPT;
             {
                 int8_t signed_value = mfmtio_read_i8(stream);
                 if(signed_value < 0) return MSAV_ERR_CORRUPT;
@@ -35,11 +29,11 @@ static msav_err_t msav__ubjson_read_integer(
             }
             return MSAV_ERR_OK;
         case 'U':
-            if(!msav__ubjson_has_bytes(stream, 1)) return MSAV_ERR_CORRUPT;
+            if(!mfmtio_has_bytes(stream, 1)) return MSAV_ERR_CORRUPT;
             *value = mfmtio_read_u8(stream);
             return MSAV_ERR_OK;
         case 'I':
-            if(!msav__ubjson_has_bytes(stream, 2)) return MSAV_ERR_CORRUPT;
+            if(!mfmtio_has_bytes(stream, 2)) return MSAV_ERR_CORRUPT;
             {
                 int16_t signed_value = mfmtio_read_i16(stream);
                 if(signed_value < 0) return MSAV_ERR_CORRUPT;
@@ -47,7 +41,7 @@ static msav_err_t msav__ubjson_read_integer(
             }
             return MSAV_ERR_OK;
         case 'l':
-            if(!msav__ubjson_has_bytes(stream, 4)) return MSAV_ERR_CORRUPT;
+            if(!mfmtio_has_bytes(stream, 4)) return MSAV_ERR_CORRUPT;
             {
                 int32_t signed_value = mfmtio_read_i32(stream);
                 if(signed_value < 0) return MSAV_ERR_CORRUPT;
@@ -61,7 +55,7 @@ static msav_err_t msav__ubjson_read_integer(
             return MSAV_ERR_CORRUPT;
     }
 
-    if(!msav__ubjson_has_bytes(stream, size))
+    if(!mfmtio_has_bytes(stream, size))
         return MSAV_ERR_CORRUPT;
     for(uint32_t i = 0; i < size; i++)
         result = (result << 8) | mfmtio_read_u8(stream);
@@ -76,7 +70,7 @@ static msav_err_t msav__ubjson_skip_string(mfmtio_rstream_t *stream)
     int type = 0;
     uint64_t length = 0;
 
-    if(!msav__ubjson_has_bytes(stream, 1))
+    if(!mfmtio_has_bytes(stream, 1))
         return MSAV_ERR_CORRUPT;
     type = mfmtio_read_u8(stream);
     if(msav__ubjson_read_integer(stream, type, &length) != MSAV_ERR_OK)
@@ -136,7 +130,7 @@ static msav_err_t msav__ubjson_count_container(
     if(depth >= 128)
         return MSAV_ERR_CORRUPT;
 
-    while(msav__ubjson_has_bytes(stream, 1))
+    while(mfmtio_has_bytes(stream, 1))
     {
         int metadata = stream->buf[stream->idx];
         if(metadata != '$' && metadata != '#')
@@ -145,14 +139,14 @@ static msav_err_t msav__ubjson_count_container(
 
         if(metadata == '$')
         {
-            if(!msav__ubjson_has_bytes(stream, 1))
+            if(!mfmtio_has_bytes(stream, 1))
                 return MSAV_ERR_CORRUPT;
             (void)mfmtio_read_u8(stream);
         }
         else
         {
             int length_type = 0;
-            if(!msav__ubjson_has_bytes(stream, 1))
+            if(!mfmtio_has_bytes(stream, 1))
                 return MSAV_ERR_CORRUPT;
             length_type = mfmtio_read_u8(stream);
             if(msav__ubjson_read_integer(stream, length_type, &declared_count) != MSAV_ERR_OK)
@@ -164,7 +158,7 @@ static msav_err_t msav__ubjson_count_container(
         }
     }
 
-    while(has_count ? entries < container_count : msav__ubjson_has_bytes(stream, 1))
+    while(has_count ? entries < container_count : mfmtio_has_bytes(stream, 1))
     {
         if(object)
         {
@@ -187,7 +181,7 @@ static msav_err_t msav__ubjson_count_container(
             break;
         }
 
-        if(!msav__ubjson_has_bytes(stream, 1))
+        if(!mfmtio_has_bytes(stream, 1))
             return MSAV_ERR_CORRUPT;
 
         {

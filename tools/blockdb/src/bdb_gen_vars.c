@@ -1,8 +1,8 @@
-#include "gen_vars.h"
+#include "bdb_gen_vars.h"
 
 #include "bdb_log.h"
 #include "bdb_arr.h"
-#include "gen_utils.h"
+#include "bdb_gen_utils.h"
 
 int bdb__gen_link_vars(
         const bdb__arr_view_t *vds

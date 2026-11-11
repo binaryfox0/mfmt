@@ -1,11 +1,11 @@
-#include "gen_blocks.h"
+#include "bdb_gen_blocks.h"
 #include <stdlib.h>
 #include <string.h>
 
 #include "bdb_log.h"
-#include "gen_tree.h"
-#include "gen_assign.h"
-#include "gen_utils.h"
+#include "bdb_gen_tree.h"
+#include "bdb_gen_assign.h"
+#include "bdb_gen_utils.h"
 
 #define BDB_NOT_FOUND (size_t)-1
 size_t bdb__gen_find_variables(

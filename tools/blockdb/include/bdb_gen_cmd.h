@@ -1,5 +1,5 @@
-#ifndef BLOCKDB_GEN_H
-#define BLOCKDB_GEN_H
+#ifndef BLOCKDB_GEN_CMD_H
+#define BLOCKDB_GEN_CMD_H
 
 typedef struct
 {

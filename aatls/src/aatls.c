@@ -102,7 +102,7 @@ aatls_err_t aatls_parse_from_memory(
 
     version = mfmtio_read_i8(&stream);
 
-    if(stream.eos)
+    if(stream.err != MFMTIO_ERR_OK)
         return AATLS_ERR_CORRUPT;
 
     for(;;)
@@ -114,14 +114,15 @@ aatls_err_t aatls_parse_from_memory(
         // Reads.checkEOF is a wrapper of Reads.c
         // which read a byte
         (void)c;
-        if(stream.eos)
+        if(stream.err == MFMTIO_ERR_EOF)
             break;
         
         char *mfmtio_name = mfmtio_read_utf(&stream);
-        if(stream.oom)
+        if(stream.err != MFMTIO_ERR_OK || !mfmtio_name)
         {
             mfmtio_free(mfmtio_name);
-            rc = AATLS_ERR_NO_MEM;
+            rc = stream.err == MFMTIO_ERR_NO_MEM ?
+                AATLS_ERR_NO_MEM : AATLS_ERR_CORRUPT;
             break;
         }
         pg.name = aatls__strdup(mfmtio_name);
@@ -140,7 +141,7 @@ aatls_err_t aatls_parse_from_memory(
         pg.v_wrap = mfmtio_read_i8(&stream);
         rg_cnt_tmp = mfmtio_read_i32(&stream);
 
-        if(stream.eos)
+        if(stream.err != MFMTIO_ERR_OK)
         {
             aatls__free(pg.name);
             rc = AATLS_ERR_CORRUPT;
@@ -169,10 +170,11 @@ aatls_err_t aatls_parse_from_memory(
         {
             aatls_region_t region = {0};
             char *mfmtio_name = mfmtio_read_utf(&stream);
-            if(stream.oom)
+            if(stream.err != MFMTIO_ERR_OK || !mfmtio_name)
             {
                 mfmtio_free(mfmtio_name);
-                rc = AATLS_ERR_NO_MEM;
+                rc = stream.err == MFMTIO_ERR_NO_MEM ?
+                    AATLS_ERR_NO_MEM : AATLS_ERR_CORRUPT;
                 break;
             }
             region.name = aatls__strdup(mfmtio_name);
@@ -212,7 +214,7 @@ aatls_err_t aatls_parse_from_memory(
             }
 
             if(
-                    stream.eos || 
+                    stream.err != MFMTIO_ERR_OK ||
                     aatls__validate_region(&region) < 0)
             {
                 rc = AATLS_ERR_CORRUPT;
@@ -311,7 +313,8 @@ aatls_err_t aatls_write_to_memory(
         
         if(mfmtio_write_utf(&stream, page->name) < 0)
         {
-            rc = AATLS_ERR_CORRUPT;
+            rc = stream.err == MFMTIO_ERR_NO_MEM ?
+                AATLS_ERR_NO_MEM : AATLS_ERR_CORRUPT;
             break;
         }
 
@@ -323,7 +326,7 @@ aatls_err_t aatls_write_to_memory(
         mfmtio_write_i8(&stream, page->v_wrap);
         mfmtio_write_i32(&stream, page->region_count);
             
-        if(stream.oom)
+        if(stream.err == MFMTIO_ERR_NO_MEM)
         {
             rc = AATLS_ERR_NO_MEM;
             break;
@@ -335,7 +338,8 @@ aatls_err_t aatls_write_to_memory(
 
             if(mfmtio_write_utf(&stream, region->name) < 0)
             {
-                rc = AATLS_ERR_CORRUPT;
+                rc = stream.err == MFMTIO_ERR_NO_MEM ?
+                    AATLS_ERR_NO_MEM : AATLS_ERR_CORRUPT;
                 break;
             }
 
@@ -367,7 +371,7 @@ aatls_err_t aatls_write_to_memory(
                    mfmtio_write_i16(&stream, region->pads[k]);
             }
 
-            if(stream.oom)
+            if(stream.err == MFMTIO_ERR_NO_MEM)
             {
                 rc = AATLS_ERR_NO_MEM;
                 break;

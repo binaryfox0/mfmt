@@ -5,13 +5,19 @@
 #include <string.h>
 #include <mfmtio_alloc.h>
 
+typedef enum
+{
+    MFMTIO_ERR_OK = 0,
+    MFMTIO_ERR_EOF,
+    MFMTIO_ERR_NO_MEM
+} mfmtio_err_t;
+
 typedef struct mfmtio_rstream
 {
     const uint8_t *buf;
     uint32_t idx;
     uint32_t bufsz;
-    int eos; /* End of stream */
-    int oom; /* Out of memory */
+    mfmtio_err_t err;
 } mfmtio_rstream_t;
 
 typedef struct mfmtio_wstream
@@ -19,15 +25,24 @@ typedef struct mfmtio_wstream
     uint8_t *buf;
     uint32_t size;
     uint32_t cap;
-    int oom; /* Out of memory */
+    mfmtio_err_t err;
 } mfmtio_wstream_t;
+
+static inline int mfmtio_has_bytes(
+        const mfmtio_rstream_t *stream,
+        uint32_t count)
+{
+    return stream && stream->err == MFMTIO_ERR_OK && stream->idx <= stream->bufsz &&
+           count <= stream->bufsz - stream->idx;
+}
 
 static inline int8_t mfmtio_read_i8(mfmtio_rstream_t *stream)
 {
     uint8_t v = 0;
-    if(stream->idx >= stream->bufsz || stream->eos)
+    if(!mfmtio_has_bytes(stream, 1))
     {
-        stream->eos = 1;
+        if(stream && stream->err == MFMTIO_ERR_OK)
+            stream->err = MFMTIO_ERR_EOF;
         return 0;
     }
     v = stream->buf[stream->idx++];
@@ -37,9 +52,10 @@ static inline int8_t mfmtio_read_i8(mfmtio_rstream_t *stream)
 static inline uint8_t mfmtio_read_u8(mfmtio_rstream_t *stream)
 {
     uint8_t v = 0;
-    if(stream->idx >= stream->bufsz || stream->eos)
+    if(!mfmtio_has_bytes(stream, 1))
     {
-        stream->eos = 1;
+        if(stream && stream->err == MFMTIO_ERR_OK)
+            stream->err = MFMTIO_ERR_EOF;
         return 0;
     }
     v = stream->buf[stream->idx++];
@@ -48,9 +64,10 @@ static inline uint8_t mfmtio_read_u8(mfmtio_rstream_t *stream)
 
 static inline int mfmtio_read_bool(mfmtio_rstream_t *stream)
 {
-    if(stream->idx >= stream->bufsz || stream->eos)
+    if(!mfmtio_has_bytes(stream, 1))
     {
-        stream->eos = 1;
+        if(stream && stream->err == MFMTIO_ERR_OK)
+            stream->err = MFMTIO_ERR_EOF;
         return 0;
     }
     return (int)stream->buf[stream->idx++] != 0;
@@ -59,9 +76,10 @@ static inline int mfmtio_read_bool(mfmtio_rstream_t *stream)
 static inline int16_t mfmtio_read_i16(mfmtio_rstream_t *stream)
 {
     uint16_t v = 0;
-    if(stream->idx + 1 >= stream->bufsz || stream->eos)
+    if(!mfmtio_has_bytes(stream, 2))
     {
-        stream->eos = 1;
+        if(stream && stream->err == MFMTIO_ERR_OK)
+            stream->err = MFMTIO_ERR_EOF;
         return 0;
     }
     v = ((uint16_t)stream->buf[stream->idx++] << 8) |
@@ -72,9 +90,10 @@ static inline int16_t mfmtio_read_i16(mfmtio_rstream_t *stream)
 static inline uint16_t mfmtio_read_u16(mfmtio_rstream_t *stream)
 {
     uint16_t v = 0;
-    if(stream->idx + 1 >= stream->bufsz || stream->eos)
+    if(!mfmtio_has_bytes(stream, 2))
     {
-        stream->eos = 1;
+        if(stream && stream->err == MFMTIO_ERR_OK)
+            stream->err = MFMTIO_ERR_EOF;
         return 0;
     }
     v = ((uint16_t)stream->buf[stream->idx++] << 8) |
@@ -85,9 +104,10 @@ static inline uint16_t mfmtio_read_u16(mfmtio_rstream_t *stream)
 static inline int32_t mfmtio_read_i32(mfmtio_rstream_t *stream)
 {
     uint32_t v = 0;
-    if(stream->idx + 3 >= stream->bufsz || stream->eos)
+    if(!mfmtio_has_bytes(stream, 4))
     {
-        stream->eos = 1;
+        if(stream && stream->err == MFMTIO_ERR_OK)
+            stream->err = MFMTIO_ERR_EOF;
         return 0;
     }
     v = ((uint32_t)stream->buf[stream->idx++] << 24) | 
@@ -101,9 +121,10 @@ static inline float mfmtio_read_f32(mfmtio_rstream_t *stream)
 {
     uint32_t v = 0;
     float f = 0;
-    if(stream->idx + 3 >= stream->bufsz || stream->eos)
+    if(!mfmtio_has_bytes(stream, 4))
     {
-        stream->eos = 1;
+        if(stream && stream->err == MFMTIO_ERR_OK)
+            stream->err = MFMTIO_ERR_EOF;
         return 0;
     }
     v = ((uint32_t)stream->buf[stream->idx++] << 24) | 
@@ -119,9 +140,10 @@ static inline double mfmtio_read_f64(mfmtio_rstream_t *stream)
 {
     uint64_t v = 0;
     double d = 0;
-    if(stream->idx + 7 >= stream->bufsz || stream->eos)
+    if(!mfmtio_has_bytes(stream, 8))
     {
-        stream->eos = 1;
+        if(stream && stream->err == MFMTIO_ERR_OK)
+            stream->err = MFMTIO_ERR_EOF;
         return 0;
     }
     v = ((uint64_t)stream->buf[stream->idx++] << 56) | 
@@ -143,12 +165,14 @@ static inline void mfmtio_read_fully(
         const uint32_t bufsz
 )
 {
-    if(stream->idx + (bufsz - 1) >= stream->bufsz || stream->eos)
+    if(!mfmtio_has_bytes(stream, bufsz))
     {
-        stream->eos = 1;
+        if(stream && stream->err == MFMTIO_ERR_OK)
+            stream->err = MFMTIO_ERR_EOF;
         return;
     }
-    memcpy(buf, &stream->buf[stream->idx], bufsz);
+    if(bufsz)
+        memcpy(buf, &stream->buf[stream->idx], bufsz);
     stream->idx += bufsz;
 }
 

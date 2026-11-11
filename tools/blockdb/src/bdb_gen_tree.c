@@ -1,11 +1,11 @@
-#include "gen_tree.h"
+#include "bdb_gen_tree.h"
 
 #include <stdlib.h>
 #include <string.h>
 
 #include "bdb_log.h"
 #include "bdb_ui.h"
-#include "gen_vars.h"
+#include "bdb_gen_vars.h"
 
 int bdb__gen_build_tree(bdb__arr_t *classes)
 {

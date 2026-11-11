@@ -1,7 +1,7 @@
 #include <aparse.h>
 
-#include "print_tree.h"
-#include "gen_cmd.h"
+#include "bdb_print_tree.h"
+#include "bdb_gen_cmd.h"
 
 int main(int argc, char **argv)
 {
@@ -36,7 +36,7 @@ int main(int argc, char **argv)
     };
     aparse_arg commands[] = {
         aparse_arg_subparser_impl(
-                "print-tree", print_tree_args, print_tree_command, 
+                "print-tree", print_tree_args, bdb_print_tree_command,
                 NULL, 0,
                 "Print AST of a Java source file", 
                 (size_t[]){0, 8}, 1
