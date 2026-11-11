@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "mfmtio_alloc_priv.h"
+#include "mfmtio_alloc.h"
 
 #define AATLS__MIN(a, b) ((a) < (b) ? (a) : (b))
 

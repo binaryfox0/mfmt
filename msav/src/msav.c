@@ -7,13 +7,11 @@
 #include <zlib-ng.h>
 
 #include "msav_zlib.h"
-#include "mfmtio_alloc_priv.h"
 #include "msav_log_priv.h"
 #include "msav_blocks_gen.h"
+#include "msav_alloc_priv.h"
 
 #define MSAV__ARRSZ(array) (sizeof(array) / sizeof((array)[0]))
-
-static const uint8_t msav__header[] = {'M', 'S', 'A', 'V'};
 
 typedef struct msav__file_reader msav__file_reader_t;
 typedef msav_err_t (*msav__payload_read_fn)(
@@ -24,7 +22,6 @@ typedef msav_err_t (*msav__chunk_read_fn)(
         msav__file_reader_t *reader,
         const char *name,
         msav__payload_read_fn payload_read);
-
 typedef struct
 {
     int32_t version;
@@ -42,42 +39,19 @@ struct msav__file_reader
     msav__chunk_read_fn entity_chunk_read;
 };
 
-static msav_err_t msav__read_chunk_common(
-        mfmtio_rstream_t *stream,
-        msav__file_reader_t *reader,
-        const char *name,
-        msav__payload_read_fn payload_read,
-        int legacy_length);
-static msav_err_t msav__read_map(
-        mfmtio_rstream_t *stream,
-        msav__file_reader_t *reader);
-static msav_err_t msav__skip_payload(
-    mfmtio_rstream_t *stream,
-    msav__file_reader_t *reader);
+static const uint8_t msav__header[] = {'M', 'S', 'A', 'V'};
 
-static int msav__has_bytes(const mfmtio_rstream_t *stream, uint32_t count)
-{
-    return stream && !stream->eos && stream->idx <= stream->bufsz &&
-           count <= stream->bufsz - stream->idx;
-}
 
 static msav_err_t msav__read_chunk_modern(
         mfmtio_rstream_t *stream,
         msav__file_reader_t *reader,
         const char *name,
-        msav__payload_read_fn payload_read)
-{
-    return msav__read_chunk_common(stream, reader, name, payload_read, 0);
-}
-
+        msav__payload_read_fn payload_read);
 static msav_err_t msav__read_chunk_legacy(
         mfmtio_rstream_t *stream,
         msav__file_reader_t *reader,
         const char *name,
-        msav__payload_read_fn payload_read)
-{
-    return msav__read_chunk_common(stream, reader, name, payload_read, 1);
-}
+        msav__payload_read_fn payload_read);
 
 #define MSAV__VERSION_READER(version_number, entity_reader, entity_format) \
     {version_number, msav__read_chunk_modern, entity_reader, entity_format}
@@ -101,7 +75,64 @@ static const msav__version_readers_t msav__version_readers[] =
 
 #undef MSAV__VERSION_READER
 
-static const msav__version_readers_t *msav__get_version_readers(int32_t version)
+static const char *msav__ctype_strings[MSAV__CTYPE_COUNT] =
+{
+    [MSAV_CTYPE_ITEM]           = "item",
+    [MSAV_CTYPE_BLOCK]          = "block",
+    [MSAV_CTYPE_MECH]           = "mech",       /* unused */
+    [MSAV_CTYPE_BULLET]         = "bullet",
+    [MSAV_CTYPE_LIQUID]         = "liquid",
+    [MSAV_CTYPE_STATUS]         = "status",
+    [MSAV_CTYPE_UNIT]           = "unit",
+    [MSAV_CTYPE_WEATHER]        = "weather",
+    [MSAV_CTYPE_EFFECT]         = "effect",     /* unused */
+    [MSAV_CTYPE_SECTOR]         = "sector",
+    [MSAV_CTYPE_LOADOUT]        = "loadout",    /* unused */
+    [MSAV_CTYPE_TYPEID]         = "typeid",     /* unused */
+    [MSAV_CTYPE_ERROR]          = "error",
+    [MSAV_CTYPE_PLANET]         = "planet",
+    [MSAV_CTYPE_AMMO]           = "ammo",       /* unused */
+    [MSAV_CTYPE_TEAM]           = "team",
+    [MSAV_CTYPE_UNIT_COMMAND]   = "unitCommand",
+    [MSAV_CTYPE_UNIT_STANCE]    = "unitStance",
+};
+
+static int msav__has_bytes(const mfmtio_rstream_t *stream, uint32_t count)
+{
+    return stream && !stream->eos && stream->idx <= stream->bufsz &&
+           count <= stream->bufsz - stream->idx;
+}
+
+static msav_err_t msav__read_chunk_common(
+        mfmtio_rstream_t *stream,
+        msav__file_reader_t *reader,
+        const char *name,
+        msav__payload_read_fn payload_read,
+        int legacy_length);
+
+static msav_err_t msav__read_chunk_modern(
+        mfmtio_rstream_t *stream,
+        msav__file_reader_t *reader,
+        const char *name,
+        msav__payload_read_fn payload_read)
+{
+    return msav__read_chunk_common(stream, reader, name, 
+            payload_read, 0);
+}
+
+static msav_err_t msav__read_chunk_legacy(
+        mfmtio_rstream_t *stream,
+        msav__file_reader_t *reader,
+        const char *name,
+        msav__payload_read_fn payload_read)
+{
+    return msav__read_chunk_common(stream, reader, name, 
+            payload_read, 1);
+}
+
+
+static const msav__version_readers_t *msav__get_version_readers(
+        const int32_t version)
 {
     for(size_t i = 0; i < MSAV__ARRSZ(msav__version_readers); i++)
     {
@@ -111,11 +142,14 @@ static const msav__version_readers_t *msav__get_version_readers(int32_t version)
     return NULL;
 }
 
+static msav_err_t msav__skip_payload(
+        mfmtio_rstream_t *stream,
+        msav__file_reader_t *reader);
 static msav_err_t msav__read_chunk_common(
         mfmtio_rstream_t *stream,
         msav__file_reader_t *reader,
         const char *name,
-        msav__payload_read_fn payload_read,
+        msav__payload_read_fn payload_read_fn,
         int legacy_length)
 {
     uint32_t prefix_size = legacy_length ? 2u : 4u;
@@ -127,7 +161,7 @@ static msav_err_t msav__read_chunk_common(
     msav_err_t rc = MSAV_ERR_OK;
     const char *format = legacy_length ? "legacy-u16" : "i32";
 
-    if(!stream || !reader || !name || !payload_read)
+    if(!stream || !reader || !name || !payload_read_fn)
         return MSAV_ERR_PARAM;
     if(!msav__has_bytes(stream, prefix_size))
     {
@@ -152,14 +186,14 @@ static msav_err_t msav__read_chunk_common(
 
     if(stream->eos || !msav__has_bytes(stream, length))
     {
-        MSAV__ERROR("chunk '%s': length %u exceeds remaining input at offset 0x%08X",
-                name, length, stream->idx);
+        MSAV__ERROR("chunk '%s': length %u exceeds remaining input "
+                "at offset 0x%08X", name, length, stream->idx);
         return MSAV_ERR_CORRUPT;
     }
 
     payload_start = stream->idx;
     payload_end = payload_start + length;
-    is_skip = payload_read == msav__skip_payload;
+    is_skip = payload_read_fn == msav__skip_payload;
     if(is_skip && legacy_length)
         MSAV__DEBUG("chunk '%s': format=%s offset=0x%08X length=%u",
                 name, format, payload_start - prefix_size, length);
@@ -167,7 +201,7 @@ static msav_err_t msav__read_chunk_common(
         MSAV__INFO("chunk '%s' begin: format=%s offset=0x%08X length=%u",
                 name, format, payload_start - prefix_size, length);
 
-    rc = payload_read(stream, reader);
+    rc = payload_read_fn(stream, reader);
     if(rc != MSAV_ERR_OK)
     {
         MSAV__ERROR("chunk '%s' failed at offset 0x%08X (error=%d)",
@@ -204,7 +238,8 @@ static msav_err_t msav__skip_region(
 
     if(!msav__has_bytes(stream, 4))
     {
-        MSAV__ERROR("region '%s': missing length at offset 0x%08X", name, stream->idx);
+        MSAV__ERROR("region '%s': missing length at offset 0x%08X", 
+                name, stream->idx);
         return MSAV_ERR_CORRUPT;
     }
 
@@ -220,7 +255,8 @@ static msav_err_t msav__skip_region(
     length = (uint32_t)signed_length;
     if(!msav__has_bytes(stream, length))
     {
-        MSAV__ERROR("region '%s': length %u exceeds remaining input at offset 0x%08X",
+        MSAV__ERROR("region '%s': length %u exceeds "
+                "remaining input at offset 0x%08X",
                 name, length, stream->idx);
         return MSAV_ERR_CORRUPT;
     }
@@ -278,6 +314,50 @@ static int msav__dump_map(
     return 0;
 }
 
+msav_err_t msav__read_meta(
+        mfmtio_rstream_t *stream, 
+        msav__file_reader_t *reader)
+{
+    int16_t size = mfmtio_read_i16(stream);
+    MSAV__INFO("meta: entries=%d", size);
+    for(int16_t i = 0; i < size; i++)
+    {
+        char* key = mfmtio_read_utf(stream);
+        char* val = mfmtio_read_utf(stream);
+        MSAV__DEBUG("meta entry %d: key=\"%s\", val=\"%s\"", 
+                i, key, val);
+        mfmtio_free(key);
+        mfmtio_free(val);
+    }
+    MSAV__INFO("meta decoded: entries=%d", size);
+    return MSAV_ERR_OK;
+}
+
+msav_err_t msav__read_content(
+        mfmtio_rstream_t *stream, 
+        msav__file_reader_t *reader)
+{
+    
+    int8_t mapped = mfmtio_read_i8(stream);
+    MSAV__INFO("content: mapped=%d", mapped);
+    for(int i = 0; i < mapped; i++)
+    {
+        char ctype = mfmtio_read_i8(stream);
+        int16_t total = mfmtio_read_i16(stream);
+        
+        MSAV__INFO("content: type=%d (%s), total=%d", 
+                ctype, msav__ctype_strings[ctype], total);
+        for(int16_t j = 0; j < total; j++)
+        {
+            char* name = mfmtio_read_utf(stream);
+            MSAV__INFO("content entry: name=\"%s\"", name);
+            mfmtio_free(name);
+        }
+    }
+    MSAV__INFO("content decoded: mapped=%d", mapped);
+    return MSAV_ERR_OK;
+}
+
 static msav_err_t msav__read_map(
         mfmtio_rstream_t *stream,
         msav__file_reader_t *reader)
@@ -307,13 +387,14 @@ static msav_err_t msav__read_map(
     tile_count = (uint32_t)width * height;
     if((size_t)tile_count > SIZE_MAX / sizeof(*floors))
     {
-        MSAV__ERROR("map: dimensions %u x %u exceed allocation limits", width, height);
+        MSAV__ERROR("map: dimensions %u x %u exceed allocation limits", 
+                width, height);
         return MSAV_ERR_CORRUPT;
     }
 
-    floors = mfmtio__calloc(tile_count, sizeof(*floors));
-    ores = mfmtio__calloc(tile_count, sizeof(*ores));
-    blocks = mfmtio__calloc(tile_count, sizeof(*blocks));
+    floors = msav__calloc(tile_count, sizeof(*floors));
+    ores = msav__calloc(tile_count, sizeof(*ores));
+    blocks = msav__calloc(tile_count, sizeof(*blocks));
     if(!floors || !ores || !blocks)
     {
         MSAV__ERROR("map: unable to allocate %u tiles", tile_count);
@@ -321,7 +402,8 @@ static msav_err_t msav__read_map(
         goto cleanup;
     }
 
-    MSAV__INFO("map begin: width=%u height=%u tiles=%u", width, height, tile_count);
+    MSAV__INFO("map begin: width=%u height=%u tiles=%u", 
+            width, height, tile_count);
 
     for(uint32_t i = 0; i < tile_count;)
     {
@@ -404,7 +486,9 @@ static msav_err_t msav__read_map(
             if(is_center)
             {
                 const char *chunk_name = "tile entity";
-                rc = reader->entity_chunk_read(stream, reader, chunk_name, msav__skip_payload);
+                rc = reader->entity_chunk_read(
+                        stream, reader, chunk_name, 
+                        msav__skip_payload);
                 if(rc != MSAV_ERR_OK)
                     goto cleanup;
             }
@@ -445,7 +529,8 @@ static msav_err_t msav__read_map(
                 i % width, i / width, block, name ? name : "unknown");
     }
 
-    MSAV__INFO("map decoded: width=%u height=%u tiles=%u", width, height, tile_count);
+    MSAV__INFO("map decoded: width=%u height=%u tiles=%u", 
+            width, height, tile_count);
     msav__dump_map(floors, width, height, "floors_dump.txt");
     msav__dump_map(ores, width, height, "ores_dump.txt");
     msav__dump_map(blocks, width, height, "blocks_dump.txt");
@@ -455,10 +540,57 @@ malformed_map:
     MSAV__ERROR("map: malformed tile data at offset 0x%08X", stream->idx);
 
 cleanup:
-    mfmtio__free(floors);
-    mfmtio__free(ores);
-    mfmtio__free(blocks);
+    msav__free(floors);
+    msav__free(ores);
+    msav__free(blocks);
     return rc;
+}
+
+msav_err_t msav__read_patches(
+        mfmtio_rstream_t *stream, 
+        msav__file_reader_t *reader)
+{
+    uint8_t amount = mfmtio_read_i8(stream);
+    MSAV__INFO("patches: amount=%u", amount);
+    for(int i = 0; i < amount; i++)
+    {
+        int32_t len = 0;
+        int8_t *bytes = 0;
+
+        len = mfmtio_read_i32(stream);
+        bytes = msav__malloc((len + 1) * sizeof(int8_t));
+        if(!bytes)
+            break;
+
+        mfmtio_read_fully(stream, bytes, len);
+        bytes[len] = '\0';
+        MSAV__DEBUG("patches: name=\"%s\"", bytes);
+        msav__free(bytes);
+    }
+    MSAV__INFO("patches decoded: amount=%u", amount);
+    return MSAV_ERR_OK;
+}
+
+msav_err_t msave__read_custom(
+        mfmtio_rstream_t *stream, 
+        msav__file_reader_t *reader)
+{
+    int32_t amount = mfmtio_read_i32(stream);
+    MSAV__INFO("custom: amount=%d", amount);
+    for(int32_t i = 0; i < amount; i++)
+    {
+        char *name = 0;
+        msav_err_t rc = MSAV_ERR_OK;
+        name = mfmtio_read_utf(stream);
+        MSAV__DEBUG("custom: name=\"%s\"", name);
+
+        rc = msav__skip_region(stream, name);
+        mfmtio_free(name);
+        if(rc != MSAV_ERR_OK)
+            return MSAV_ERR_CORRUPT;
+    }
+    MSAV__INFO("custom decoded: amount=%d", amount);
+    return MSAV_ERR_OK;
 }
 
 static msav_err_t msav__read_file(
@@ -467,27 +599,53 @@ static msav_err_t msav__read_file(
 {
     msav_err_t rc = MSAV_ERR_OK;
 
-    rc = msav__skip_region(stream, "metadata");
-    if(rc != MSAV_ERR_OK)
-        return rc;
-    rc = msav__skip_region(stream, "content mapping");
+    rc = reader->chunk_read(
+            stream, reader, 
+            "metadata", 
+            msav__read_meta);
     if(rc != MSAV_ERR_OK)
         return rc;
 
-    if(reader->version >= 11)
+    rc = reader->chunk_read(
+            stream, reader, 
+            "content mapping", 
+            msav__read_content);
+    if(rc != MSAV_ERR_OK)
+        return rc;
+
+    if(reader->version >= 12)
     {
-        rc = reader->chunk_read(stream, reader, "patches", msav__skip_payload);
+        rc = reader->chunk_read(
+                stream, reader, 
+                "patches", 
+                msav__read_patches);
         if(rc != MSAV_ERR_OK)
             return rc;
     }
 
-    rc = reader->chunk_read(stream, reader, "map", msav__read_map);
+    rc = reader->chunk_read(
+            stream, reader, 
+            "map", 
+            msav__read_map);
     if(rc != MSAV_ERR_OK)
         return rc;
 
-    if(stream->idx < stream->bufsz)
-        MSAV__INFO("%u trailing bytes remain after the map region",
+    rc = msav__skip_region(stream, "entities");
+    if(rc != MSAV_ERR_OK)
+        return rc;
+
+    if(reader->version >= 8)
+    {
+        rc = msav__skip_region(stream, "markers");
+        if(rc != MSAV_ERR_OK)
+            return rc;
+    }
+
+    if(stream->idx != stream->bufsz)
+    {
+        MSAV__WARN("%u trailing bytes remain after reading",
                 stream->bufsz - stream->idx);
+    }
     return MSAV_ERR_OK;
 }
 
@@ -505,13 +663,15 @@ msav_err_t msav_parse_from_memory(
     msav_err_t rc = MSAV_ERR_OK;
     const msav__version_readers_t *version_readers = NULL;
 
-    if(!buf || bufsz == 0)
-    {
-        MSAV__ERROR("parse: input buffer is empty");
+    if(!buf || bufsz == 0 || !out)
         return MSAV_ERR_PARAM;
-    }
 
-    zlib_rc = msav__decompress(buf, (int64_t)bufsz, &decompressed_buf, &decompressed_bufsz);
+    zlib_rc = msav__decompress(
+            buf, 
+            (int64_t)bufsz, 
+            &decompressed_buf, 
+            &decompressed_bufsz);
+
     if(zlib_rc == Z_OK && decompressed_buf && decompressed_bufsz > 0 &&
        (uint64_t)decompressed_bufsz <= UINT32_MAX)
     {
@@ -521,7 +681,7 @@ msav_err_t msav_parse_from_memory(
     }
     else if(zlib_rc == Z_DATA_ERROR)
     {
-        mfmtio__free(decompressed_buf);
+        msav__free(decompressed_buf);
         decompressed_buf = NULL;
         decompressed_bufsz = 0;
         MSAV__INFO("input is not a zlib stream; parsing as raw save data");
@@ -529,7 +689,7 @@ msav_err_t msav_parse_from_memory(
     else
     {
         MSAV__ERROR("decompression failed: zlib result=%d", zlib_rc);
-        mfmtio__free(decompressed_buf);
+        msav__free(decompressed_buf);
         return MSAV_ERR_COMPRESS;
     }
 
@@ -578,8 +738,7 @@ msav_err_t msav_parse_from_memory(
 
     reader.chunk_read = version_readers->chunk_read;
     reader.entity_chunk_read = version_readers->entity_chunk_read;
-    if(out)
-        out->version = reader.version;
+    out->version = reader.version;
 
     MSAV__INFO("save header valid: version=%d", reader.version);
     MSAV__INFO("chunk readers selected: generic=i32, entity=%s",
@@ -587,16 +746,19 @@ msav_err_t msav_parse_from_memory(
 
     rc = msav__read_file(&stream, &reader);
     if(rc == MSAV_ERR_OK)
-        MSAV__INFO("save decoded successfully: version=%d consumed=%u/%u bytes",
+        MSAV__INFO("save decoded successfully: "
+                "version=%d consumed=%u/%u bytes",
                 reader.version, stream.idx, stream.bufsz);
 
 cleanup:
     if(use_decompressed)
-        mfmtio__free(decompressed_buf);
+        msav__free(decompressed_buf);
     return rc;
 }
 
-msav_err_t msav_parse(const char *file_name, msav_file_t *out)
+msav_err_t msav_parse(
+        const char *path, 
+        msav_file_t *out)
 {
     FILE *file = NULL;
     long file_size = 0;
@@ -604,37 +766,35 @@ msav_err_t msav_parse(const char *file_name, msav_file_t *out)
     size_t read_size = 0;
     msav_err_t rc = MSAV_ERR_OK;
 
-    if(!file_name)
-    {
-        MSAV__ERROR("parse: file name is null");
+    if(!path || !out)
         return MSAV_ERR_PARAM;
-    }
 
-    file = fopen(file_name, "rb");
+    file = fopen(path, "rb");
     if(!file)
     {
-        MSAV__ERROR("could not open save file '%s'", file_name);
+        MSAV__ERROR("could not open save file '%s'", path);
         return MSAV_ERR_IO;
     }
 
-    if(fseek(file, 0, SEEK_END) != 0 || (file_size = ftell(file)) < 0 ||
-       fseek(file, 0, SEEK_SET) != 0)
+    if(fseek(file, 0, SEEK_END) != 0 || 
+            (file_size = ftell(file)) < 0 ||
+            fseek(file, 0, SEEK_SET) != 0)
     {
-        MSAV__ERROR("could not determine size of save file '%s'", file_name);
+        MSAV__ERROR("could not determine size of save file '%s'", path);
         fclose(file);
         return MSAV_ERR_IO;
     }
     if((uint64_t)file_size > UINT32_MAX)
     {
-        MSAV__ERROR("save file '%s' exceeds supported size", file_name);
+        MSAV__ERROR("save file '%s' exceeds supported size", path);
         fclose(file);
         return MSAV_ERR_CORRUPT;
     }
 
-    file_data = mfmtio__malloc(file_size ? (size_t)file_size : 1);
+    file_data = msav__malloc(file_size ? (size_t)file_size : 1);
     if(!file_data)
     {
-        MSAV__ERROR("could not allocate %ld bytes for '%s'", file_size, file_name);
+        MSAV__ERROR("could not allocate %ld bytes for '%s'", file_size, path);
         fclose(file);
         return MSAV_ERR_NO_MEM;
     }
@@ -642,16 +802,16 @@ msav_err_t msav_parse(const char *file_name, msav_file_t *out)
     read_size = fread(file_data, 1, (size_t)file_size, file);
     if(read_size != (size_t)file_size || ferror(file))
     {
-        MSAV__ERROR("could not read save file '%s' completely", file_name);
-        mfmtio__free(file_data);
+        MSAV__ERROR("could not read save file '%s' completely", path);
+        msav__free(file_data);
         fclose(file);
         return MSAV_ERR_IO;
     }
     fclose(file);
 
-    MSAV__INFO("opened save file '%s': %zu bytes", file_name, read_size);
+    MSAV__INFO("opened save file '%s': %zu bytes", path, read_size);
     rc = msav_parse_from_memory(file_data, (uint32_t)read_size, out);
-    mfmtio__free(file_data);
+    msav__free(file_data);
     return rc;
 }
 

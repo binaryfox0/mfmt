@@ -22,4 +22,8 @@ typedef struct
  */
 int mfmtio_alloc_set(const mfmtio_alloc_t *alloc);
 
+void *mfmtio_malloc(size_t size);
+void *mfmtio_realloc(void *ptr, size_t size);
+void mfmtio_free(void *ptr);
+
 #endif

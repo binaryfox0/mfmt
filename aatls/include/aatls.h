@@ -44,7 +44,7 @@ typedef enum {
     AATLS_ERR_OK = 0,        /**< Operation completed successfully */
     AATLS_ERR_INVALID_ARG,   /**< Invalid argument passed to function */
     AATLS_ERR_IO,            /**< I/O failure during file operations */
-    AATLS_ERR_OUT_OF_MEM,    /**< Memory allocation failed */
+    AATLS_ERR_NO_MEM,    /**< Memory allocation failed */
     AATLS_ERR_FORMAT,        /**< Invalid or unsupported file format */
     AATLS_ERR_CORRUPT,       /**< Corrupted or inconsistent data */
     __AATLS_ERR_END__

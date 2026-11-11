@@ -9,14 +9,38 @@
  */
 typedef enum {
     MSAV_ERR_OK = 0,        /**< Operation completed successfully */
-    MSAV_ERR_PARAM,   /**< Invalid argument passed to function */
+    MSAV_ERR_PARAM,         /**< Invalid argument passed to function */
     MSAV_ERR_IO,            /**< I/O failure during file operations */
-    MSAV_ERR_COMPRESS,          /**< Zlib compression-related errors */
-    MSAV_ERR_NO_MEM,    /**< Memory allocation failed */
+    MSAV_ERR_COMPRESS,      /**< Zlib compression-related errors */
+    MSAV_ERR_NO_MEM,        /**< Memory allocation failed */
     MSAV_ERR_FORMAT,        /**< Invalid or unsupported file format */
+    MSAV_ERR_UNSUPPORTED,   /**< Unsupported file version */
     MSAV_ERR_CORRUPT,       /**< Corrupted or inconsistent data */
     MSAV__ERR_COUNT
 } msav_err_t;
+
+typedef enum
+{
+    MSAV_CTYPE_ITEM,
+    MSAV_CTYPE_BLOCK,
+    MSAV_CTYPE_MECH,            /* unused */
+    MSAV_CTYPE_BULLET,
+    MSAV_CTYPE_LIQUID,
+    MSAV_CTYPE_STATUS,
+    MSAV_CTYPE_UNIT,
+    MSAV_CTYPE_WEATHER,
+    MSAV_CTYPE_EFFECT,          /* unused */
+    MSAV_CTYPE_SECTOR,
+    MSAV_CTYPE_LOADOUT,         /* unused */
+    MSAV_CTYPE_TYPEID,          /* unused */
+    MSAV_CTYPE_ERROR,
+    MSAV_CTYPE_PLANET,
+    MSAV_CTYPE_AMMO,            /* unused */
+    MSAV_CTYPE_TEAM,
+    MSAV_CTYPE_UNIT_COMMAND,
+    MSAV_CTYPE_UNIT_STANCE,
+    MSAV__CTYPE_COUNT
+} msav_ctype_t;
 
 typedef struct
 {

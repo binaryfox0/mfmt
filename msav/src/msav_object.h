@@ -3,33 +3,13 @@
 
 #include <stdint.h>
 
+#include "msav.h"
 #include "msav_arr.h"
 
-typedef enum
-{
-    MSAV__CTYPE_ITEM,
-    MSAV__CTYPE_BLOCK,
-    MSAV__CTYPE_MECH, /* Unused */
-    MSAV__CTYPE_BULLET,
-    MSAV__CTYPE_LIQUID,
-    MSAV__CTYPE_STATUS,
-    MSAV__CTYPE_UNIT,
-    MSAV__CTYPE_WEATHER,
-    MSAV__CTYPE_EFFECT, /* Unused */
-    MSAV__CTYPE_SECTOR,
-    MSAV__CTYPE_LOADOUT, /* Unused */
-    MSAV__CTYPE_TYPEID, /* Unused */
-    MSAV__CTYPE_ERROR,
-    MSAV__CTYPE_PLANET,
-    MSAV__CTYPE_AMMO, /* Unused */
-    MSAV__CTYPE_TEAM,
-    MSAV__CTYPE_UNIT_COMMAND,
-    MSAV__CTYPE_UNIT_STANCE,
-} msav__content_type_t;
 
 typedef struct
 {
-    msav__content_type_t type;
+    msav_ctype_t type;
     int32_t idx;
 } msav__content_t;
 

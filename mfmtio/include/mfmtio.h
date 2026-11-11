@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <mfmtio_alloc.h>
 
 typedef struct mfmtio_rstream
 {

@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "mfmtio_alloc_priv.h"
+#include "msav_alloc_priv.h"
 
 int msav__arr_create(
         msav__arr_t *arr, 
@@ -17,7 +17,7 @@ int msav__arr_create(
     if(initial_size == 0)
         return 0;
 
-    arr->data = malloc(elem_size * initial_size);
+    arr->data = msav__malloc(elem_size * initial_size);
     if(!arr->data)
         return -1;
 
@@ -34,6 +34,6 @@ void msav__arr_destroy(
 {
     if(!arr)
         return;
-    free(arr->data);
+    msav__free(arr->data);
     *arr = (msav__arr_t){0};
 }

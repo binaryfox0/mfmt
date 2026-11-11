@@ -1,9 +1,9 @@
-#include "mfmtio.h"
+#include <mfmtio.h>
 
 #include <stdlib.h>
 #include <string.h>
 
-#include "mfmtio_alloc_priv.h"
+#include <mfmtio_alloc.h>
 
 char* mfmtio_read_utf(mfmtio_rstream_t *stream)
 {
@@ -20,7 +20,7 @@ char* mfmtio_read_utf(mfmtio_rstream_t *stream)
         stream->eos = 1;
         return 0;
     }
-    out = malloc(len + 1);
+    out = mfmtio_malloc(len + 1);
     if(!out)
     {
         stream->oom = 1;
@@ -48,7 +48,7 @@ int mfmtio_wensure(mfmtio_wstream_t *stream, const uint32_t extra)
         new_cap *= 2;
     }
 
-    uint8_t *nbuf = realloc(stream->buf, new_cap);
+    uint8_t *nbuf = mfmtio_realloc(stream->buf, new_cap);
     if(!nbuf){
         stream->oom = 1;
         return 0;

@@ -5,7 +5,7 @@
 
 #include <zlib-ng.h>
 
-#include "mfmtio_alloc_priv.h"
+#include "msav_alloc_priv.h"
 
 typedef struct
 {
@@ -27,7 +27,7 @@ int msav__buf_append(
         int64_t new_cap = 0;
 
         new_cap = dynbuf->capacity ? dynbuf->capacity * 2 : MSAV__BUF_DEFAULT_CAP;
-        new_data = realloc(dynbuf->data, new_cap);
+        new_data = msav__realloc(dynbuf->data, new_cap);
         if(!new_data)
             return -1;
 
@@ -69,7 +69,7 @@ int32_t msav__decompress(
         if(err != Z_OK && err != Z_STREAM_END)
         {
             zng_inflateEnd(&stream);
-            free(dynbuf.data);
+            msav__free(dynbuf.data);
             return err;
         }
 
@@ -80,7 +80,7 @@ int32_t msav__decompress(
             if(msav__buf_append(&dynbuf, out_tmp, produced) != 0)
             {
                 zng_inflateEnd(&stream);
-                free(dynbuf.data);
+                msav__free(dynbuf.data);
                 return -1;
             }
         }

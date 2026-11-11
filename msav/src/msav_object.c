@@ -3,8 +3,7 @@
 #include <stdlib.h>
 
 #include <mfmtio.h>
-
-#include "mfmtio_alloc_priv.h"
+#include "msav_alloc_priv.h"
 
 /* readObject */
 int msav__obj_read(mfmtio_rstream_t *stream, msav__obj_t *obj)
@@ -60,7 +59,9 @@ int msav__obj_read(mfmtio_rstream_t *stream, msav__obj_t *obj)
             len_i8 = mfmtio_read_i8(stream);
             if(len_i8 < 0)
                 return -1;
-            if(msav__arr_create(&obj->pa, sizeof(msav__point2_t), (size_t)len_i8) < 0)
+            if(msav__arr_create(&obj->pa, 
+                        sizeof(msav__point2_t), 
+                        (size_t)len_i8) < 0)
                 return -1;
             for(int8_t i = 0; i < len_i8; i++)
             {
@@ -98,7 +99,9 @@ int msav__obj_read(mfmtio_rstream_t *stream, msav__obj_t *obj)
 
         case MSAV__OBJ_BOOL_ARRAY:
             len_i32 = mfmtio_read_i32(stream);
-            if(msav__arr_create(&obj->ba, sizeof(msav__bool), (size_t)len_i32) < 0)
+            if(msav__arr_create(&obj->ba, 
+                        sizeof(msav__bool), 
+                        (size_t)len_i32) < 0)
                 return -1;
             for(int32_t i = 0; i < len_i32; i++)
                 msav__arr_at(&obj->ba, msav__bool, i) = mfmtio_read_bool(stream);
@@ -110,7 +113,9 @@ int msav__obj_read(mfmtio_rstream_t *stream, msav__obj_t *obj)
 
         case MSAV__OBJ_VEC2_ARRAY:
             len_i16 = mfmtio_read_i16(stream);
-            if(msav__arr_create(&obj->va, sizeof(msav__vec2_t), (size_t)len_i16) < 0)
+            if(msav__arr_create(&obj->va, 
+                        sizeof(msav__vec2_t), 
+                        (size_t)len_i16) < 0)
                 return -1;
             for(int16_t i = 0; i < len_i16; i++)
             {
@@ -134,7 +139,9 @@ int msav__obj_read(mfmtio_rstream_t *stream, msav__obj_t *obj)
 
         case MSAV__OBJ_INT_ARRAY:
             len_i16 = mfmtio_read_i16(stream);
-            if(msav__arr_create(&obj->ia, sizeof(int32_t), (size_t)len_i16) < 0)
+            if(msav__arr_create(&obj->ia, 
+                        sizeof(int32_t), 
+                        (size_t)len_i16) < 0)
                 return -1;
             for(int16_t i = 0; i < len_i16; i++)
                 msav__arr_at(&obj->va, int32_t, i) = mfmtio_read_i32(stream);
@@ -142,7 +149,9 @@ int msav__obj_read(mfmtio_rstream_t *stream, msav__obj_t *obj)
 
         case MSAV__OBJ_OBJECT_ARRAY:
             len_i32 = mfmtio_read_i32(stream);
-            if(msav__arr_create(&obj->oa, sizeof(msav__obj_t), (size_t)len_i32) < 0)
+            if(msav__arr_create(&obj->oa, 
+                        sizeof(msav__obj_t), 
+                        (size_t)len_i32) < 0)
                 return -1;
             for(int32_t i = 0; i < len_i32; i++)
             {

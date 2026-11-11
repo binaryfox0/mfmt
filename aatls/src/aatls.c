@@ -7,7 +7,7 @@
 #include "aatls_arr.h"
 #include <mfmtio.h>
 
-#include "mfmtio_alloc_priv.h"
+#include "mfmtio_alloc.h"
 
 #define AATLS__ARRSZ(arr) (sizeof((arr)) / sizeof((arr)[0]))
 #define AATLS__TYPE_ARRSZ(t, a) (AATLS__ARRSZ(((t*)0)->a))
@@ -23,7 +23,7 @@ const char* aatls_strerror(
         [AATLS_ERR_OK] = "ok",
         [AATLS_ERR_INVALID_ARG] = "invalid argument",
         [AATLS_ERR_IO] = "i/o error",
-        [AATLS_ERR_OUT_OF_MEM] = "out of memory",
+        [AATLS_ERR_NO_MEM] = "out of memory",
         [AATLS_ERR_FORMAT] = "invalid file format",
         [AATLS_ERR_CORRUPT] = "corrupted data",
     };
@@ -58,7 +58,7 @@ aatls_err_t aatls_parse(
     if(!file_data)
     {
         fclose(file);
-        return AATLS_ERR_OUT_OF_MEM;
+        return AATLS_ERR_NO_MEM;
     }
     fread(file_data, 1, (size_t)file_size, file);
     fclose(file);
@@ -119,7 +119,7 @@ aatls_err_t aatls_parse_from_memory(
         pg.name = mfmtio_read_utf(&stream);
         if(stream.oom)
         {
-            rc = AATLS_ERR_OUT_OF_MEM;
+            rc = AATLS_ERR_NO_MEM;
             break;
         }
 
@@ -151,7 +151,7 @@ aatls_err_t aatls_parse_from_memory(
         if(!pg.regions)
         {
             free(pg.name);
-            rc = AATLS_ERR_OUT_OF_MEM;
+            rc = AATLS_ERR_NO_MEM;
             break;
         }
         pg.region_capacity = pg.region_count;
@@ -162,7 +162,7 @@ aatls_err_t aatls_parse_from_memory(
             region.name = mfmtio_read_utf(&stream);
             if(stream.oom)
             {
-                rc = AATLS_ERR_OUT_OF_MEM;
+                rc = AATLS_ERR_NO_MEM;
                 break;
             }
 
@@ -212,7 +212,7 @@ aatls_err_t aatls_parse_from_memory(
         }
 
         if(aatls__arr_push(&arr, &pg) < 0){
-            rc = AATLS_ERR_OUT_OF_MEM;
+            rc = AATLS_ERR_NO_MEM;
             break;
         }
     }
@@ -308,7 +308,7 @@ aatls_err_t aatls_write_to_memory(
             
         if(stream.oom)
         {
-            rc = AATLS_ERR_OUT_OF_MEM;
+            rc = AATLS_ERR_NO_MEM;
             break;
         }
 
@@ -352,7 +352,7 @@ aatls_err_t aatls_write_to_memory(
 
             if(stream.oom)
             {
-                rc = AATLS_ERR_OUT_OF_MEM;
+                rc = AATLS_ERR_NO_MEM;
                 break;
             }
         }
@@ -461,7 +461,7 @@ aatls_err_t aatls__copy_region(
 
     tmp.name = strdup(src->name);
     if(!tmp.name)
-        return AATLS_ERR_OUT_OF_MEM;
+        return AATLS_ERR_NO_MEM;
 
     *dst = tmp;
 
@@ -533,7 +533,7 @@ aatls_err_t aatls__copy_page(
  
     tmp.name = strdup(src->name);
     if(!tmp.name)
-        return AATLS_ERR_OUT_OF_MEM;
+        return AATLS_ERR_NO_MEM;
 
     tmp.width  = src->width;
     tmp.height = src->height;
@@ -548,7 +548,7 @@ aatls_err_t aatls__copy_page(
         if(!tmp.regions)
         {
             free(tmp.name);
-            return AATLS_ERR_OUT_OF_MEM;
+            return AATLS_ERR_NO_MEM;
         }
         for(int32_t i = 0; i < src->region_count; i++)
         {
@@ -632,7 +632,7 @@ aatls_err_t aatls_copy_atlas(
     {
         tmp.pages = malloc(sizeof(*tmp.pages) * src->page_count);
         if(!tmp.pages)
-            return AATLS_ERR_OUT_OF_MEM;
+            return AATLS_ERR_NO_MEM;
         for(int32_t i = 0; i < src->page_count; i++)
         {
             aatls_err_t err = AATLS_ERR_OK;
@@ -676,7 +676,7 @@ aatls_err_t aatls_insert_region(
         return AATLS_ERR_CORRUPT;
 
     if(aatls__arr_insert(&arr, region, idx) < 0)
-        return AATLS_ERR_OUT_OF_MEM;
+        return AATLS_ERR_NO_MEM;
 
     memset(region, 0, sizeof(*region));
 
@@ -706,7 +706,7 @@ aatls_err_t aatls_insert_page(
         return AATLS_ERR_CORRUPT;
 
     if(aatls__arr_insert(&arr, page, idx) < 0)
-        return AATLS_ERR_OUT_OF_MEM;
+        return AATLS_ERR_NO_MEM;
 
     memset(page, 0, sizeof(*page));
 
